@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { AudioFileInfo, isAudioFile, getFileExtension } from '@/lib/audio-types';
-import { analyzeAudioFile } from '@/lib/audio-analyzer';
+import { detectBpm } from '@/lib/bpm-detector';
 
 let idCounter = 0;
 
@@ -24,12 +24,6 @@ export function useAudioAnalyzer() {
           size: file.size,
           duration: 0,
           bpm: null,
-          key: null,
-          mode: null,
-          camelot: null,
-          energy: null,
-          mood: null,
-          genre: null,
           status: 'pending',
           file,
         });
@@ -49,22 +43,11 @@ export function useAudioAnalyzer() {
       );
 
       try {
-        const result = await analyzeAudioFile(audioFiles[i].file);
+        const result = await detectBpm(audioFiles[i].file);
         setFiles(prev =>
           prev.map(f =>
             f.id === audioFiles[i].id
-              ? {
-                  ...f,
-                  bpm: result.bpm,
-                  duration: result.duration,
-                  key: result.key,
-                  mode: result.mode,
-                  camelot: result.camelot,
-                  energy: result.energy,
-                  mood: result.mood,
-                  genre: result.genre,
-                  status: 'done',
-                }
+              ? { ...f, bpm: result.bpm, duration: result.duration, status: 'done' }
               : f
           )
         );

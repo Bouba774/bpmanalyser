@@ -1,18 +1,3 @@
-export type MusicalKey = 
-  | 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B';
-
-export type KeyMode = 'major' | 'minor';
-
-export type EnergyLevel = 'low' | 'medium' | 'high';
-
-export type MoodTag = 
-  | 'chill' | 'dark' | 'happy' | 'aggressive' 
-  | 'melancholic' | 'euphoric' | 'dreamy' | 'intense';
-
-export type GenreTag = 
-  | 'house' | 'techno' | 'trance' | 'dnb' | 'dubstep'
-  | 'hip-hop' | 'pop' | 'rock' | 'ambient' | 'other';
-
 export interface AudioFileInfo {
   id: string;
   name: string;
@@ -21,29 +6,12 @@ export interface AudioFileInfo {
   size: number;
   duration: number;
   bpm: number | null;
-  key: MusicalKey | null;
-  mode: KeyMode | null;
-  camelot: string | null;
-  energy: EnergyLevel | null;
-  mood: MoodTag | null;
-  genre: GenreTag | null;
   status: 'pending' | 'analyzing' | 'done' | 'error';
   error?: string;
   file: File;
 }
 
-export interface AnalysisResult {
-  bpm: number;
-  duration: number;
-  key: MusicalKey;
-  mode: KeyMode;
-  camelot: string;
-  energy: EnergyLevel;
-  mood: MoodTag;
-  genre: GenreTag;
-}
-
-export type SortKey = 'name' | 'bpm' | 'duration' | 'format' | 'key' | 'energy' | 'mood' | 'genre';
+export type SortKey = 'name' | 'bpm' | 'duration' | 'format';
 export type SortDirection = 'asc' | 'desc';
 
 export interface SortConfig {
@@ -51,21 +19,11 @@ export interface SortConfig {
   direction: SortDirection;
 }
 
-export interface MultiSortConfig {
-  rules: SortConfig[];
-}
-
 export interface FilterConfig {
   search: string;
   bpmMin: number | null;
   bpmMax: number | null;
-  energy: EnergyLevel | null;
-  mood: MoodTag | null;
-  key: MusicalKey | null;
-  genre: GenreTag | null;
 }
-
-export type ClusterMode = 'bpm' | 'energy' | 'mood' | 'key' | 'genre' | 'hybrid';
 
 export const BPM_GROUPS = [
   { label: '< 90 BPM', min: 0, max: 89, colorClass: 'text-bpm-slow' },
@@ -76,11 +34,6 @@ export const BPM_GROUPS = [
 ] as const;
 
 export const SUPPORTED_FORMATS = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm'];
-
-export const ALL_KEYS: MusicalKey[] = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-export const ALL_ENERGIES: EnergyLevel[] = ['low', 'medium', 'high'];
-export const ALL_MOODS: MoodTag[] = ['chill', 'dark', 'happy', 'aggressive', 'melancholic', 'euphoric', 'dreamy', 'intense'];
-export const ALL_GENRES: GenreTag[] = ['house', 'techno', 'trance', 'dnb', 'dubstep', 'hip-hop', 'pop', 'rock', 'ambient', 'other'];
 
 export function getFileExtension(filename: string): string {
   return filename.split('.').pop()?.toLowerCase() || '';
@@ -115,26 +68,4 @@ export function getBpmColor(bpm: number): string {
   if (bpm <= 125) return 'hsl(40, 90%, 55%)';
   if (bpm <= 140) return 'hsl(20, 90%, 55%)';
   return 'hsl(0, 80%, 55%)';
-}
-
-export function getEnergyColor(energy: EnergyLevel): string {
-  switch (energy) {
-    case 'low': return 'hsl(200, 80%, 55%)';
-    case 'medium': return 'hsl(40, 90%, 55%)';
-    case 'high': return 'hsl(0, 80%, 55%)';
-  }
-}
-
-export function getMoodColor(mood: MoodTag): string {
-  const colors: Record<MoodTag, string> = {
-    chill: 'hsl(200, 70%, 55%)',
-    dark: 'hsl(270, 50%, 45%)',
-    happy: 'hsl(45, 90%, 55%)',
-    aggressive: 'hsl(0, 80%, 50%)',
-    melancholic: 'hsl(220, 60%, 50%)',
-    euphoric: 'hsl(320, 80%, 60%)',
-    dreamy: 'hsl(260, 60%, 65%)',
-    intense: 'hsl(15, 90%, 55%)',
-  };
-  return colors[mood];
 }
