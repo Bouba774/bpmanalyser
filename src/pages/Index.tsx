@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { FolderOpen, Download, Trash2, StopCircle, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { AnalysisProgress } from '@/components/AnalysisProgress';
 import { FilterBar } from '@/components/FilterBar';
 import { AudioFileRow } from '@/components/AudioFileRow';
+import { MiniPlayer } from '@/components/MiniPlayer';
 import { exportToPdf } from '@/lib/pdf-export';
 import {
   AudioFileInfo,
@@ -21,6 +22,29 @@ const Index = () => {
   const [filter, setFilter] = useState<FilterConfig>({ search: '', bpmMin: null, bpmMax: null });
   const [sort, setSort] = useState<SortConfig>({ key: 'bpm', direction: 'asc' });
   const [viewMode, setViewMode] = useState<'list' | 'grouped'>('list');
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [playingFile, setPlayingFile] = useState<File | null>(null);
+  const [playingName, setPlayingName] = useState('');
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const handlePlay = useCallback((id: string, file: File) => {
+    const audioFile = files.find(f => f.id === id);
+    setPlayingId(id);
+    setPlayingFile(file);
+    setPlayingName(audioFile?.name || '');
+    setIsPlaying(true);
+  }, [files]);
+
+  const handleStopPlayer = useCallback(() => {
+    setPlayingId(null);
+    setPlayingFile(null);
+    setPlayingName('');
+    setIsPlaying(false);
+  }, []);
+
+  const handleTogglePlayer = useCallback(() => {
+    setIsPlaying(prev => !prev);
+  }, []);
 
   const handleFolderSelect = () => {
     folderInputRef.current?.click();
@@ -220,15 +244,16 @@ const Index = () => {
         {hasFiles && viewMode === 'list' && (
           <div className="space-y-1">
             {/* Header row */}
-            <div className="grid grid-cols-[1fr_60px_60px_50px] sm:grid-cols-[1fr_80px_100px_70px_auto] gap-2 sm:gap-4 px-3 sm:px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div className="grid grid-cols-[28px_1fr_60px] sm:grid-cols-[28px_1fr_80px_100px_70px_auto] gap-2 sm:gap-4 px-3 sm:px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <span></span>
               <span>Fichier</span>
               <span className="text-center">BPM</span>
-              <span className="text-center">Durée</span>
+              <span className="text-center hidden sm:block">Durée</span>
               <span className="text-center hidden sm:block">Format</span>
               <span className="text-right hidden sm:block">Catégorie</span>
             </div>
             {filteredAndSorted.map((file, i) => (
-              <AudioFileRow key={file.id} file={file} index={i} />
+              <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} />
             ))}
           </div>
         )}
@@ -252,7 +277,7 @@ const Index = () => {
                 </div>
                 <div className="space-y-1">
                   {group.files.map((file, i) => (
-                    <AudioFileRow key={file.id} file={file} index={i} />
+                    <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} />
                   ))}
                 </div>
               </div>
@@ -260,6 +285,14 @@ const Index = () => {
           </div>
         )}
       </main>
+
+      <MiniPlayer
+        file={playingFile}
+        fileName={playingName}
+        isPlaying={isPlaying}
+        onStop={handleStopPlayer}
+        onToggle={handleTogglePlayer}
+      />
     </div>
   );
 };
