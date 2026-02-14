@@ -15,14 +15,13 @@ export function AudioFileRow({ file, index }: AudioFileRowProps) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.02, 0.5), duration: 0.25 }}
-      className="grid grid-cols-[1fr_80px_100px_70px_auto] gap-4 items-center px-4 py-3 bg-card hover:bg-surface-hover rounded-lg border border-border/50 transition-colors group"
+      className="grid grid-cols-[1fr_60px_60px_50px] sm:grid-cols-[1fr_80px_100px_70px_auto] gap-2 sm:gap-4 items-center px-3 sm:px-4 py-3 bg-card hover:bg-surface-hover rounded-lg border border-border/50 transition-colors group"
     >
       {/* File name */}
       <div className="flex items-center gap-3 min-w-0">
         <Music className="h-4 w-4 text-muted-foreground shrink-0" />
-        <div className="min-w-0">
+        <div className="min-w-0 overflow-hidden">
           <p className="text-sm font-medium truncate">{file.name}</p>
-          <p className="text-xs text-muted-foreground truncate">{file.path}</p>
         </div>
       </div>
 
@@ -53,14 +52,14 @@ export function AudioFileRow({ file, index }: AudioFileRowProps) {
       </div>
 
       {/* Format */}
-      <div className="text-center">
+      <div className="text-center hidden sm:block">
         <span className="text-xs font-mono uppercase px-2 py-0.5 rounded bg-secondary text-secondary-foreground">
           {file.format}
         </span>
       </div>
 
       {/* BPM Category */}
-      <div className="text-right min-w-[100px]">
+      <div className="text-right min-w-[80px] hidden sm:block">
         {bpmGroup && (
           <span
             className="text-xs font-medium px-2 py-1 rounded-full"
