@@ -220,12 +220,12 @@ const Index = () => {
         {hasFiles && viewMode === 'list' && (
           <div className="space-y-1">
             {/* Header row */}
-            <div className="grid grid-cols-[1fr_80px_100px_70px_auto] gap-4 px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div className="grid grid-cols-[1fr_60px_60px_50px] sm:grid-cols-[1fr_80px_100px_70px_auto] gap-2 sm:gap-4 px-3 sm:px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
               <span>Fichier</span>
               <span className="text-center">BPM</span>
               <span className="text-center">Durée</span>
-              <span className="text-center">Format</span>
-              <span className="text-right">Catégorie</span>
+              <span className="text-center hidden sm:block">Format</span>
+              <span className="text-right hidden sm:block">Catégorie</span>
             </div>
             {filteredAndSorted.map((file, i) => (
               <AudioFileRow key={file.id} file={file} index={i} />
