@@ -110,7 +110,7 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
 
   return (
     <AlertDialog open={open} onOpenChange={handleClose}>
-      <AlertDialogContent className="max-w-lg max-h-[85vh] overflow-y-auto bg-card border-border">
+      <AlertDialogContent className="max-w-[95vw] sm:max-w-lg max-h-[80vh] overflow-y-auto bg-card border-border mx-2 p-4 sm:p-6">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <FolderSync className="h-5 w-5 text-primary" />
@@ -131,17 +131,17 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
 
         {/* Step: Config */}
         {step === 'config' && (
-          <div className="space-y-5">
+          <div className="space-y-3 sm:space-y-5">
             {/* Format */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold text-foreground">Format de renommage</Label>
-              <RadioGroup value={format} onValueChange={(v) => setFormat(v as RenameFormat)} className="space-y-2">
+            <div className="space-y-2">
+              <Label className="text-xs sm:text-sm font-semibold text-foreground">Format de renommage</Label>
+              <RadioGroup value={format} onValueChange={(v) => setFormat(v as RenameFormat)} className="space-y-1.5">
                 {(Object.keys(formatLabels) as RenameFormat[]).map(key => (
-                  <div key={key} className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors">
+                  <div key={key} className="flex items-center gap-2 sm:gap-3 p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors">
                     <RadioGroupItem value={key} id={key} />
                     <Label htmlFor={key} className="flex-1 cursor-pointer">
-                      <span className="text-sm font-medium">{formatLabels[key].label}</span>
-                      <span className="block text-xs font-mono text-muted-foreground mt-0.5">{formatLabels[key].example}</span>
+                      <span className="text-xs sm:text-sm font-medium">{formatLabels[key].label}</span>
+                      <span className="block text-[10px] sm:text-xs font-mono text-muted-foreground">{formatLabels[key].example}</span>
                     </Label>
                   </div>
                 ))}
@@ -151,46 +151,46 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
                   type="text"
                   value={customTemplate}
                   onChange={e => setCustomTemplate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-xs sm:text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   placeholder="{index}_{bpm}_{nom}"
                 />
               )}
             </div>
 
             {/* Sort Order */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold text-foreground">Classement</Label>
-              <RadioGroup value={sortOrder} onValueChange={v => setSortOrder(v as SortOrder)} className="flex gap-3">
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors flex-1">
+            <div className="space-y-2">
+              <Label className="text-xs sm:text-sm font-semibold text-foreground">Classement</Label>
+              <RadioGroup value={sortOrder} onValueChange={v => setSortOrder(v as SortOrder)} className="flex gap-2 sm:gap-3">
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors flex-1">
                   <RadioGroupItem value="asc" id="asc" />
-                  <Label htmlFor="asc" className="cursor-pointer flex items-center gap-1.5 text-sm">
-                    <ChevronUp className="h-3.5 w-3.5" /> Croissant
+                  <Label htmlFor="asc" className="cursor-pointer flex items-center gap-1 text-xs sm:text-sm">
+                    <ChevronUp className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Croissant
                   </Label>
                 </div>
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors flex-1">
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors flex-1">
                   <RadioGroupItem value="desc" id="desc" />
-                  <Label htmlFor="desc" className="cursor-pointer flex items-center gap-1.5 text-sm">
-                    <ChevronDown className="h-3.5 w-3.5" /> Décroissant
+                  <Label htmlFor="desc" className="cursor-pointer flex items-center gap-1 text-xs sm:text-sm">
+                    <ChevronDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Décroissant
                   </Label>
                 </div>
               </RadioGroup>
             </div>
 
             {/* Security badge */}
-            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-primary/5 border border-primary/10 text-xs text-muted-foreground">
-              <Shield className="h-4 w-4 text-primary shrink-0" />
-              <span>Backup automatique • Rollback possible • Zéro perte de données</span>
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/10 text-[10px] sm:text-xs text-muted-foreground">
+              <Shield className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span>Backup auto • Rollback • Zéro perte</span>
             </div>
 
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleShowRollback} className="flex items-center gap-1.5">
-                <RotateCcw className="h-3.5 w-3.5" /> Historique
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={handleShowRollback} className="flex items-center gap-1 text-xs">
+                <RotateCcw className="h-3 w-3" /> Historique
               </Button>
               <div className="flex-1" />
               <AlertDialogCancel asChild>
-                <Button variant="ghost" size="sm">Annuler</Button>
+                <Button variant="ghost" size="sm" className="text-xs">Annuler</Button>
               </AlertDialogCancel>
-              <Button size="sm" onClick={() => setStep('preview')} disabled={analyzedFiles.length === 0}>
+              <Button size="sm" onClick={() => setStep('preview')} disabled={analyzedFiles.length === 0} className="text-xs">
                 Aperçu
               </Button>
             </div>
