@@ -44,10 +44,31 @@ jobs:
     - name: Register SAF Plugin in MainActivity
       run: |
         MAIN_ACTIVITY="android/app/src/main/java/app/lovable/e61fee5bc92f456f8684aa0b1a8db0a3/MainActivity.java"
-        # Add import for the plugin
-        sed -i 's/import com.getcapacitor.BridgeActivity;/import com.getcapacitor.BridgeActivity;\nimport app.lovable.e61fee5bc92f456f8684aa0b1a8db0a3.plugins.SAFPlugin;/' "$MAIN_ACTIVITY"
-        # Register plugin in onCreate
-        sed -i '/super.onCreate/a\\n        this.bridge.registerPlugin(SAFPlugin.class);' "$MAIN_ACTIVITY"
+        echo "=== Original MainActivity ==="
+        cat "$MAIN_ACTIVITY"
+        
+        # Write a complete MainActivity with the plugin registered
+        cat > "$MAIN_ACTIVITY" << 'MAINEOF'
+        package app.lovable.e61fee5bc92f456f8684aa0b1a8db0a3;
+
+        import android.os.Bundle;
+        import com.getcapacitor.BridgeActivity;
+        import app.lovable.e61fee5bc92f456f8684aa0b1a8db0a3.plugins.SAFPlugin;
+
+        public class MainActivity extends BridgeActivity {
+            @Override
+            public void onCreate(Bundle savedInstanceState) {
+                registerPlugin(SAFPlugin.class);
+                super.onCreate(savedInstanceState);
+            }
+        }
+        MAINEOF
+        
+        # Remove leading whitespace from heredoc
+        sed -i 's/^        //' "$MAIN_ACTIVITY"
+        
+        echo "=== Updated MainActivity ==="
+        cat "$MAIN_ACTIVITY"
 
     - name: Add DocumentFile dependency
       run: |
