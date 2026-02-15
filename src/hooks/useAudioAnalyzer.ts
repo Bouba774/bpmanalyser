@@ -3,6 +3,7 @@ import { AudioFileInfo, isAudioFile, getFileExtension } from '@/lib/audio-types'
 import { detectBpm, detectBpmFromArrayBuffer } from '@/lib/bpm-detector';
 import { isNativePlatform } from '@/lib/native-file-service';
 import SAFFolderPicker, { SAFFile } from '@/plugins/saf-folder-picker';
+import { toast } from 'sonner';
 
 let idCounter = 0;
 
@@ -73,9 +74,17 @@ export function useAudioAnalyzer() {
 
   // Native SAF folder picker
   const pickNativeFolder = useCallback(async () => {
+    if (!isNativePlatform()) {
+      toast.error('Le sélecteur de dossier natif nécessite l\'application Android.');
+      return;
+    }
+
+    toast.info('Ouverture du sélecteur de dossier...');
+
     try {
       const result = await SAFFolderPicker.pickFolder();
       setFolderUri(result.folderUri);
+      toast.success(`Dossier "${result.folderName}" sélectionné — ${result.files.length} fichier(s) audio`);
 
       const audioFiles: AudioFileInfo[] = result.files.map((f: SAFFile) => ({
         id: `file-${++idCounter}`,
@@ -86,7 +95,7 @@ export function useAudioAnalyzer() {
         duration: 0,
         bpm: null,
         status: 'pending' as const,
-        file: null as any, // No web File on native — we use SAF URIs
+        file: null as any,
         safUri: f.uri,
       }));
 
@@ -103,7 +112,6 @@ export function useAudioAnalyzer() {
         );
 
         try {
-          // Read file content via SAF
           const content = await SAFFolderPicker.readFileContent({ uri: audioFiles[i].path });
           const binaryStr = atob(content.data);
           const bytes = new Uint8Array(binaryStr.length);
@@ -134,7 +142,13 @@ export function useAudioAnalyzer() {
       }
 
       setIsAnalyzing(false);
-    } catch (err) {
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      if (msg.includes('annulée') || msg.includes('cancel')) {
+        toast.info('Sélection de dossier annulée.');
+      } else {
+        toast.error(`Erreur SAF: ${msg}`);
+      }
       console.error('SAF folder pick error:', err);
     }
   }, []);
