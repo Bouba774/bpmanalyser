@@ -9,6 +9,7 @@ export interface AudioFileInfo {
   status: 'pending' | 'analyzing' | 'done' | 'error';
   error?: string;
   file: File;
+  safUri?: string; // SAF document URI for native rename
 }
 
 export type SortKey = 'name' | 'bpm' | 'duration' | 'format';
