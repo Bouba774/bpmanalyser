@@ -1,13 +1,19 @@
 package app.lovable.e61fee5bc92f456f8684aa0b1a8db0a3.plugins;
 
 import android.app.Activity;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.DocumentsContract;
+import android.provider.MediaStore;
 import android.util.Base64;
+import android.util.Log;
 
 import androidx.activity.result.ActivityResult;
 import androidx.documentfile.provider.DocumentFile;
@@ -184,11 +190,22 @@ public class SAFPlugin extends Plugin {
             boolean ok = (renamedUri != null);
 
             if (ok) {
-                // MediaStore refresh
-                String path = getPathFromUri(context, renamedUri);
-                if (path != null) {
-                    MediaScannerConnection.scanFile(context, new String[]{path}, null, null);
+                // Delete old MediaStore entry and scan new file
+                String oldPath = getPathFromUri(context, uri);
+                String newPath = getPathFromUri(context, renamedUri);
+
+                // Remove old entry from MediaStore
+                if (oldPath != null) {
+                    deleteFromMediaStore(context, oldPath);
+                    // Also scan old path to confirm removal
+                    MediaScannerConnection.scanFile(context, new String[]{oldPath}, null, null);
+                }
+
+                // Scan new file path to register in MediaStore
+                if (newPath != null) {
+                    MediaScannerConnection.scanFile(context, new String[]{newPath}, null, null);
                 } else {
+                    // Fallback: broadcast scan intent
                     Intent scanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
                     scanIntent.setData(renamedUri);
                     context.sendBroadcast(scanIntent);
@@ -291,9 +308,51 @@ public class SAFPlugin extends Plugin {
             if ("primary".equalsIgnoreCase(type)) {
                 return Environment.getExternalStorageDirectory() + "/" + relativePath;
             }
+            // Handle SD card / other volumes
+            String[] externalDirs = getExternalStoragePaths(context);
+            for (String dir : externalDirs) {
+                if (dir.contains(type)) {
+                    return dir + "/" + relativePath;
+                }
+            }
         } catch (Exception e) {
-            // ignore
+            Log.w("SAFPlugin", "getPathFromUri failed", e);
         }
         return null;
+    }
+
+    private String[] getExternalStoragePaths(Context context) {
+        java.io.File[] dirs = context.getExternalFilesDirs(null);
+        String[] paths = new String[dirs.length];
+        for (int i = 0; i < dirs.length; i++) {
+            if (dirs[i] != null) {
+                // Extract root path (before /Android/data/...)
+                String path = dirs[i].getAbsolutePath();
+                int androidIdx = path.indexOf("/Android/data");
+                paths[i] = androidIdx > 0 ? path.substring(0, androidIdx) : path;
+            } else {
+                paths[i] = "";
+            }
+        }
+        return paths;
+    }
+
+    /**
+     * Delete old file entry from MediaStore so other apps don't see stale names.
+     */
+    private void deleteFromMediaStore(Context context, String filePath) {
+        try {
+            ContentResolver cr = context.getContentResolver();
+            Uri audioUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+
+            // Query for the old file path
+            String selection = MediaStore.Audio.Media.DATA + "=?";
+            String[] selectionArgs = new String[]{filePath};
+
+            int deleted = cr.delete(audioUri, selection, selectionArgs);
+            Log.d("SAFPlugin", "MediaStore delete for " + filePath + ": " + deleted + " rows");
+        } catch (Exception e) {
+            Log.w("SAFPlugin", "MediaStore delete failed for " + filePath, e);
+        }
     }
 }
