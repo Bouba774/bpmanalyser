@@ -16,7 +16,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.util.List;
 
-@CapacitorPlugin(name = "SAFPlugin")
+@CapacitorPlugin(name = "SAFFolderPicker")
 public class SAFPlugin extends Plugin {
 
     private static final int REQUEST_CODE = 4242;
