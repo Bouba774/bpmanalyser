@@ -20,6 +20,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import android.media.MediaScannerConnection;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.Arrays;
@@ -204,6 +206,44 @@ public class SAFPlugin extends Plugin {
             if (renamedUri != null) {
                 ret.put("success", true);
                 ret.put("newUri", renamedUri.toString());
+
+                // Force MediaStore rescan so DJ apps see the new filename
+                try {
+                    String filePath = getPathFromUri(renamedUri);
+                    if (filePath != null) {
+                        MediaScannerConnection.scanFile(
+                            getContext(),
+                            new String[]{filePath},
+                            null,
+                            null
+                        );
+                    } else {
+                        // Fallback: broadcast scan intent with the URI
+                        Intent scanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+                        scanIntent.setData(renamedUri);
+                        getContext().sendBroadcast(scanIntent);
+
+    /**
+     * Attempt to resolve a file path from a SAF URI for MediaScanner.
+     */
+    private String getPathFromUri(Uri uri) {
+        try {
+            String docId = DocumentsContract.getDocumentId(uri);
+            if (docId != null && docId.contains(":")) {
+                String[] parts = docId.split(":");
+                String type = parts[0];
+                String relativePath = parts.length > 1 ? parts[1] : "";
+                if ("primary".equalsIgnoreCase(type)) {
+                    return android.os.Environment.getExternalStorageDirectory() + "/" + relativePath;
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+}
+                } catch (Exception ignored) {
+                    // Non-critical: rename succeeded even if scan fails
+                }
             } else {
                 ret.put("success", false);
                 ret.put("error", "Le renommage a échoué");
