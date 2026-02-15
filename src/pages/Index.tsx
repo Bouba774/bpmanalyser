@@ -50,13 +50,37 @@ const Index = () => {
     }
   }, [folderUri]);
 
-  const handlePlay = useCallback((id: string, file: File) => {
+  const handlePlay = useCallback(async (id: string, file: File) => {
     const audioFile = files.find(f => f.id === id);
+    if (!audioFile) return;
+
+    // On native, file.file is null — load content via SAF
+    if (isNative && audioFile.safUri && (!file || file.size === 0)) {
+      try {
+        const content = await SAFFolderPicker.readFileContent({ uri: audioFile.safUri });
+        const binaryStr = atob(content.data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let j = 0; j < binaryStr.length; j++) {
+          bytes[j] = binaryStr.charCodeAt(j);
+        }
+        const mimeType = audioFile.format === 'mp3' ? 'audio/mpeg' : `audio/${audioFile.format}`;
+        const blob = new Blob([bytes], { type: mimeType });
+        const nativeFile = new File([blob], audioFile.name, { type: mimeType });
+        setPlayingId(id);
+        setPlayingFile(nativeFile);
+        setPlayingName(audioFile.name);
+        setIsPlaying(true);
+      } catch (err: any) {
+        toast.error('Impossible de lire le fichier audio');
+      }
+      return;
+    }
+
     setPlayingId(id);
     setPlayingFile(file);
     setPlayingName(audioFile?.name || '');
     setIsPlaying(true);
-  }, [files]);
+  }, [files, isNative]);
 
   const handleStopPlayer = useCallback(() => {
     setPlayingId(null);
@@ -213,10 +237,7 @@ const Index = () => {
                 Stop
               </Button>
             )}
-            <Button onClick={handleFolderSelect} disabled={isAnalyzing} size="sm">
-              <FolderOpen className="h-4 w-4 mr-1" />
-              Dossier
-            </Button>
+            <span className="text-xs text-muted-foreground italic">By ALPHA FX</span>
           </div>
         </div>
       </header>
