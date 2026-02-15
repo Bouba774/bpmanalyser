@@ -1,12 +1,13 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Download, Trash2, StopCircle, Activity } from 'lucide-react';
+import { FolderOpen, Download, Trash2, StopCircle, Activity, FolderSync } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { AnalysisProgress } from '@/components/AnalysisProgress';
 import { FilterBar } from '@/components/FilterBar';
 import { AudioFileRow } from '@/components/AudioFileRow';
 import { MiniPlayer } from '@/components/MiniPlayer';
+import { RenameDialog } from '@/components/RenameDialog';
 import { exportToPdf } from '@/lib/pdf-export';
 import {
   AudioFileInfo,
@@ -26,6 +27,7 @@ const Index = () => {
   const [playingFile, setPlayingFile] = useState<File | null>(null);
   const [playingName, setPlayingName] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
 
   const handlePlay = useCallback((id: string, file: File) => {
     const audioFile = files.find(f => f.id === id);
@@ -145,6 +147,15 @@ const Index = () => {
                   onClick={() => setViewMode(v => v === 'list' ? 'grouped' : 'list')}
                 >
                   {viewMode === 'list' ? 'Grouper' : 'Liste'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRenameOpen(true)}
+                  disabled={doneCount === 0}
+                >
+                  <FolderSync className="h-4 w-4 mr-1" />
+                  Réorganiser
                 </Button>
                 <Button
                   variant="outline"
@@ -285,6 +296,12 @@ const Index = () => {
           </div>
         )}
       </main>
+
+      <RenameDialog
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+        files={files}
+      />
 
       <MiniPlayer
         file={playingFile}
