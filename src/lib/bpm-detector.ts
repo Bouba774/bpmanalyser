@@ -4,10 +4,14 @@
  */
 
 export async function detectBpm(file: File): Promise<{ bpm: number; duration: number }> {
+  const arrayBuffer = await file.arrayBuffer();
+  return detectBpmFromArrayBuffer(arrayBuffer);
+}
+
+export async function detectBpmFromArrayBuffer(arrayBuffer: ArrayBuffer): Promise<{ bpm: number; duration: number }> {
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
   
   try {
-    const arrayBuffer = await file.arrayBuffer();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
     const duration = audioBuffer.duration;
     

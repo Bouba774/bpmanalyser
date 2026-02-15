@@ -9,6 +9,7 @@ import { AudioFileRow } from '@/components/AudioFileRow';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { RenameDialog } from '@/components/RenameDialog';
 import { exportToPdf } from '@/lib/pdf-export';
+import { isNativePlatform } from '@/lib/native-file-service';
 import {
   AudioFileInfo,
   FilterConfig,
@@ -18,7 +19,8 @@ import {
 } from '@/lib/audio-types';
 
 const Index = () => {
-  const { files, isAnalyzing, progress, scanFiles, stopAnalysis, clearFiles } = useAudioAnalyzer();
+  const { files, isAnalyzing, progress, folderUri, scanFiles, pickNativeFolder, stopAnalysis, clearFiles } = useAudioAnalyzer();
+  const isNative = isNativePlatform();
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [filter, setFilter] = useState<FilterConfig>({ search: '', bpmMin: null, bpmMax: null });
   const [sort, setSort] = useState<SortConfig>({ key: 'bpm', direction: 'asc' });
@@ -49,7 +51,11 @@ const Index = () => {
   }, []);
 
   const handleFolderSelect = () => {
-    folderInputRef.current?.click();
+    if (isNative) {
+      pickNativeFolder();
+    } else {
+      folderInputRef.current?.click();
+    }
   };
 
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {

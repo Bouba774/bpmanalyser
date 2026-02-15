@@ -1,5 +1,5 @@
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
+import SAFFolderPicker from '@/plugins/saf-folder-picker';
 
 export interface RenameEntry {
   originalName: string;
@@ -21,8 +21,7 @@ export interface RenameOptions {
   customTemplate?: string;
 }
 
-const BACKUP_DIR = 'bpm-analyzer-backups';
-const BACKUP_FILE = 'rename-log.json';
+const RENAME_LOG_KEY = 'bpm-analyzer-rename-logs';
 
 export function isNativePlatform(): boolean {
   return Capacitor.isNativePlatform();
@@ -59,46 +58,28 @@ export function generateNewName(
 }
 
 export async function saveBackupLog(entries: RenameEntry[]): Promise<void> {
-  if (!isNativePlatform()) return;
-
   const log: RenameLog = {
     timestamp: new Date().toISOString(),
     entries,
   };
 
-  // Try to load existing logs
   let existingLogs: RenameLog[] = [];
   try {
-    const result = await Filesystem.readFile({
-      path: `${BACKUP_DIR}/${BACKUP_FILE}`,
-      directory: Directory.Documents,
-      encoding: Encoding.UTF8,
-    });
-    existingLogs = JSON.parse(result.data as string);
+    const stored = localStorage.getItem(RENAME_LOG_KEY);
+    if (stored) existingLogs = JSON.parse(stored);
   } catch {
-    // No existing log file
+    // No existing logs
   }
 
   existingLogs.push(log);
-
-  await Filesystem.writeFile({
-    path: `${BACKUP_DIR}/${BACKUP_FILE}`,
-    data: JSON.stringify(existingLogs, null, 2),
-    directory: Directory.Documents,
-    encoding: Encoding.UTF8,
-    recursive: true,
-  });
+  localStorage.setItem(RENAME_LOG_KEY, JSON.stringify(existingLogs));
 }
 
 export async function getBackupLogs(): Promise<RenameLog[]> {
-  if (!isNativePlatform()) return [];
   try {
-    const result = await Filesystem.readFile({
-      path: `${BACKUP_DIR}/${BACKUP_FILE}`,
-      directory: Directory.Documents,
-      encoding: Encoding.UTF8,
-    });
-    return JSON.parse(result.data as string);
+    const stored = localStorage.getItem(RENAME_LOG_KEY);
+    if (stored) return JSON.parse(stored);
+    return [];
   } catch {
     return [];
   }
@@ -112,12 +93,17 @@ export async function rollbackRename(log: RenameLog): Promise<{ success: number;
 
   for (const entry of log.entries) {
     try {
-      const dirPath = entry.originalUri.substring(0, entry.originalUri.lastIndexOf('/'));
-      await Filesystem.rename({
-        from: `${dirPath}/${entry.newName}`,
-        to: entry.originalUri,
+      // Use SAF rename to restore original name
+      const result = await SAFFolderPicker.renameFile({
+        uri: entry.originalUri,
+        newName: entry.originalName,
       });
-      success++;
+
+      if (result.success) {
+        success++;
+      } else {
+        errors.push(`${entry.newName}: ${result.error || 'Échec'}`);
+      }
     } catch (err) {
       errors.push(`${entry.newName}: ${(err as Error).message}`);
     }
@@ -152,21 +138,23 @@ export async function renameFilesNatively(
       continue;
     }
 
-    const dirPath = file.uri.substring(0, file.uri.lastIndexOf('/'));
-    const newUri = `${dirPath}/${newName}`;
-
     try {
-      await Filesystem.rename({
-        from: file.uri,
-        to: newUri,
+      // Use SAF DocumentsContract rename
+      const result = await SAFFolderPicker.renameFile({
+        uri: file.uri,
+        newName,
       });
 
-      entries.push({
-        originalName: file.name,
-        newName,
-        originalUri: file.uri,
-      });
-      success++;
+      if (result.success) {
+        entries.push({
+          originalName: file.name,
+          newName,
+          originalUri: file.uri,
+        });
+        success++;
+      } else {
+        errors.push(`${file.name}: ${result.error || 'Échec du renommage'}`);
+      }
     } catch (err) {
       errors.push(`${file.name}: ${(err as Error).message}`);
     }

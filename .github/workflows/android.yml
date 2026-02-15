@@ -35,6 +35,25 @@ jobs:
     - name: Add Capacitor Android
       run: npx cap add android || true
 
+    - name: Copy SAF Plugin
+      run: |
+        PLUGIN_DIR="android/app/src/main/java/app/lovable/e61fee5bc92f456f8684aa0b1a8db0a3/plugins"
+        mkdir -p "$PLUGIN_DIR"
+        cp android-plugins/SAFPlugin.java "$PLUGIN_DIR/"
+
+    - name: Register SAF Plugin in MainActivity
+      run: |
+        MAIN_ACTIVITY="android/app/src/main/java/app/lovable/e61fee5bc92f456f8684aa0b1a8db0a3/MainActivity.java"
+        # Add import for the plugin
+        sed -i 's/import com.getcapacitor.BridgeActivity;/import com.getcapacitor.BridgeActivity;\nimport app.lovable.e61fee5bc92f456f8684aa0b1a8db0a3.plugins.SAFPlugin;/' "$MAIN_ACTIVITY"
+        # Register plugin in onCreate
+        sed -i '/super.onCreate/a\\n        this.bridge.registerPlugin(SAFPlugin.class);' "$MAIN_ACTIVITY"
+
+    - name: Add DocumentFile dependency
+      run: |
+        GRADLE_FILE="android/app/build.gradle"
+        sed -i '/dependencies {/a\    implementation "androidx.documentfile:documentfile:1.0.1"' "$GRADLE_FILE"
+
     - name: Sync Capacitor
       run: npx cap sync android
 

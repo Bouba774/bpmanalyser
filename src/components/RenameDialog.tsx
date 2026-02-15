@@ -70,7 +70,7 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
       .map(f => ({
         name: f.name,
         bpm: f.bpm!,
-        uri: (f.file as any).uri || f.path,
+        uri: f.safUri || (f.file as any)?.uri || f.path,
       }));
 
     const res = await renameFilesNatively(filesToRename, options);
