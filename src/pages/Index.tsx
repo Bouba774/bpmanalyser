@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Download, Trash2, StopCircle, Activity, FolderSync } from 'lucide-react';
+import { FolderOpen, Download, Trash2, StopCircle, Activity, FolderSync, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { AnalysisProgress } from '@/components/AnalysisProgress';
@@ -10,6 +10,8 @@ import { MiniPlayer } from '@/components/MiniPlayer';
 import { RenameDialog } from '@/components/RenameDialog';
 import { exportToPdf } from '@/lib/pdf-export';
 import { isNativePlatform } from '@/lib/native-file-service';
+import SAFFolderPicker from '@/plugins/saf-folder-picker';
+import { toast } from 'sonner';
 import {
   AudioFileInfo,
   FilterConfig,
@@ -30,6 +32,23 @@ const Index = () => {
   const [playingName, setPlayingName] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+
+  const handleScanMediaStore = useCallback(async () => {
+    if (!folderUri) {
+      toast.error('Aucun dossier sélectionné');
+      return;
+    }
+    setIsScanning(true);
+    try {
+      const result = await SAFFolderPicker.scanFolder({ folderUri });
+      toast.success(`${result.scannedCount} fichier(s) synchronisé(s) avec le MediaStore`);
+    } catch (e: any) {
+      toast.error('Erreur de scan: ' + (e?.message || e));
+    } finally {
+      setIsScanning(false);
+    }
+  }, [folderUri]);
 
   const handlePlay = useCallback((id: string, file: File) => {
     const audioFile = files.find(f => f.id === id);
@@ -172,6 +191,17 @@ const Index = () => {
                   <Download className="h-4 w-4 mr-1" />
                   PDF
                 </Button>
+                {isNative && folderUri && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleScanMediaStore}
+                    disabled={isScanning}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-1 ${isScanning ? 'animate-spin' : ''}`} />
+                    Sync
+                  </Button>
+                )}
                 <Button variant="ghost" size="sm" onClick={clearFiles}>
                   <Trash2 className="h-4 w-4" />
                 </Button>

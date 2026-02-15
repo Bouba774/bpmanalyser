@@ -301,6 +301,59 @@ public class SAFPlugin extends Plugin {
     }
 
     // =========================
+    // Scan Folder (MediaStore refresh)
+    // =========================
+    @PluginMethod
+    public void scanFolder(PluginCall call) {
+        String folderUriStr = call.getString("folderUri");
+        if (folderUriStr == null) {
+            call.reject("folderUri requis");
+            return;
+        }
+
+        try {
+            Uri folderUri = Uri.parse(folderUriStr);
+            Context context = getContext();
+            DocumentFile folder = DocumentFile.fromTreeUri(context, folderUri);
+
+            if (folder == null || !folder.isDirectory()) {
+                call.reject("Dossier invalide");
+                return;
+            }
+
+            java.util.List<String> paths = new java.util.ArrayList<>();
+            collectFilePaths(context, folder, paths);
+
+            if (!paths.isEmpty()) {
+                String[] pathArray = paths.toArray(new String[0]);
+                MediaScannerConnection.scanFile(context, pathArray, null, (scanPath, uri) -> {
+                    Log.d("SAFPlugin", "Scanned: " + scanPath);
+                });
+            }
+
+            JSObject ret = new JSObject();
+            ret.put("scannedCount", paths.size());
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Erreur scan: " + e.getMessage());
+        }
+    }
+
+    private void collectFilePaths(Context context, DocumentFile dir, java.util.List<String> paths) {
+        if (dir == null) return;
+        for (DocumentFile file : dir.listFiles()) {
+            if (file.isDirectory()) {
+                collectFilePaths(context, file, paths);
+            } else if (file.isFile()) {
+                String path = getPathFromUri(context, file.getUri());
+                if (path != null) {
+                    paths.add(path);
+                }
+            }
+        }
+    }
+
+    // =========================
     // Utils
     // =========================
     private DocumentFile findFile(DocumentFile dir, String name) {
