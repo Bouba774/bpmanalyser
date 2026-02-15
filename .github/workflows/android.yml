@@ -15,12 +15,10 @@ jobs:
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
-        node-version: 18
+        node-version: 22
 
     - name: Install dependencies
-      run: |
-        npm install
-        npm install @capacitor/core @capacitor/cli @capacitor/android
+      run: npm install
 
     - name: Build web
       run: npm run build
@@ -34,11 +32,7 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Init Capacitor (safe)
-      run: |
-        npx cap init bpmapp com.bpm.dj --web-dir=dist || true
-
-    - name: Add Android platform
+    - name: Add Capacitor Android
       run: npx cap add android || true
 
     - name: Sync Capacitor
