@@ -175,21 +175,16 @@ public class SAFPlugin extends Plugin {
         try {
             Uri uri = Uri.parse(uriStr);
             Context context = getContext();
-            DocumentFile file = DocumentFile.fromSingleUri(context, uri);
 
-            if (file == null || !file.exists()) {
-                JSObject ret = new JSObject();
-                ret.put("success", false);
-                ret.put("error", "Fichier introuvable");
-                call.resolve(ret);
-                return;
-            }
+            // Use DocumentsContract.renameDocument which works with SAF tree permissions
+            Uri renamedUri = DocumentsContract.renameDocument(
+                context.getContentResolver(), uri, newName
+            );
 
-            boolean ok = file.renameTo(newName);
+            boolean ok = (renamedUri != null);
 
             if (ok) {
                 // MediaStore refresh
-                Uri renamedUri = file.getUri();
                 String path = getPathFromUri(context, renamedUri);
                 if (path != null) {
                     MediaScannerConnection.scanFile(context, new String[]{path}, null, null);
@@ -202,7 +197,9 @@ public class SAFPlugin extends Plugin {
 
             JSObject ret = new JSObject();
             ret.put("success", ok);
-            if (!ok) {
+            if (ok) {
+                ret.put("newUri", renamedUri.toString());
+            } else {
                 ret.put("error", "Renommage échoué");
             }
             call.resolve(ret);
