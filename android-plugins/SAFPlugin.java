@@ -259,12 +259,26 @@ public class SAFPlugin extends Plugin {
 
                 DocumentFile target = findFile(folder, oldName);
                 if (target != null && target.exists()) {
-                    boolean ok = target.renameTo(newName);
-                    if (ok) {
-                        Uri renamedUri = target.getUri();
-                        String path = getPathFromUri(context, renamedUri);
-                        if (path != null) {
-                            MediaScannerConnection.scanFile(context, new String[]{path}, null, null);
+                    Uri oldUri = target.getUri();
+                    String oldPath = getPathFromUri(context, oldUri);
+
+                    // Use DocumentsContract for reliable rename with SAF permissions
+                    Uri renamedUri = DocumentsContract.renameDocument(
+                        context.getContentResolver(), oldUri, newName
+                    );
+
+                    if (renamedUri != null) {
+                        String newPath = getPathFromUri(context, renamedUri);
+
+                        // Delete old MediaStore entry
+                        if (oldPath != null) {
+                            deleteFromMediaStore(context, oldPath);
+                            MediaScannerConnection.scanFile(context, new String[]{oldPath}, null, null);
+                        }
+
+                        // Scan new file to register in MediaStore
+                        if (newPath != null) {
+                            MediaScannerConnection.scanFile(context, new String[]{newPath}, null, null);
                         } else {
                             Intent scanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
                             scanIntent.setData(renamedUri);
