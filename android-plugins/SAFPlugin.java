@@ -3,13 +3,13 @@ package app.lovable.e61fee5bc92f456f8684aa0b1a8db0a3.plugins;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.database.Cursor;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.util.Base64;
 
+import androidx.activity.result.ActivityResult;
 import androidx.documentfile.provider.DocumentFile;
 
 import com.getcapacitor.JSArray;
@@ -17,6 +17,7 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.ByteArrayOutputStream;
@@ -28,7 +29,6 @@ import java.util.Set;
 @CapacitorPlugin(name = "SAFFolderPicker")
 public class SAFPlugin extends Plugin {
 
-    private static final int REQUEST_CODE = 4242;
     private static final Set<String> AUDIO_EXTENSIONS = new HashSet<>(Arrays.asList(
         "mp3", "wav", "flac", "aac", "m4a", "ogg", "wma", "aiff", "alac"
     ));
@@ -43,24 +43,23 @@ public class SAFPlugin extends Plugin {
         intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         intent.addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
-        startActivityForResult(call, intent, REQUEST_CODE);
+        startActivityForResult(call, intent, "folderPickerResult");
     }
 
-    @Override
-    protected void handleOnActivityResult(int requestCode, int resultCode, Intent data) {
-        super.handleOnActivityResult(requestCode, resultCode, data);
-
-        PluginCall savedCall = getSavedCall();
-        if (savedCall == null) {
+    @ActivityCallback
+    private void folderPickerResult(PluginCall call, ActivityResult activityResult) {
+        if (call == null) {
             return;
         }
 
-        if (requestCode != REQUEST_CODE) {
+        if (activityResult.getResultCode() != Activity.RESULT_OK) {
+            call.reject("Sélection annulée");
             return;
         }
 
-        if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
-            savedCall.reject("Sélection annulée");
+        Intent data = activityResult.getData();
+        if (data == null || data.getData() == null) {
+            call.reject("Sélection annulée");
             return;
         }
 
@@ -76,7 +75,7 @@ public class SAFPlugin extends Plugin {
 
             DocumentFile folder = DocumentFile.fromTreeUri(context, treeUri);
             if (folder == null || !folder.isDirectory()) {
-                savedCall.reject("URI invalide ou pas un dossier");
+                call.reject("URI invalide ou pas un dossier");
                 return;
             }
 
@@ -90,10 +89,10 @@ public class SAFPlugin extends Plugin {
             ret.put("folderUri", treeUri.toString());
             ret.put("folderName", folderName);
             ret.put("files", filesArray);
-            savedCall.resolve(ret);
+            call.resolve(ret);
 
         } catch (Exception e) {
-            savedCall.reject("Erreur SAF: " + e.getMessage());
+            call.reject("Erreur SAF: " + e.getMessage());
         }
     }
 
@@ -195,7 +194,6 @@ public class SAFPlugin extends Plugin {
                 if (path != null) {
                     MediaScannerConnection.scanFile(context, new String[]{path}, null, null);
                 } else {
-                    // Fallback broadcast
                     Intent scanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
                     scanIntent.setData(renamedUri);
                     context.sendBroadcast(scanIntent);
