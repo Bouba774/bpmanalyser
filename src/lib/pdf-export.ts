@@ -1,8 +1,11 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { AudioFileInfo, formatDuration, getBpmGroup } from './audio-types';
+import { isNativePlatform } from './native-file-service';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { toast } from 'sonner';
 
-export function exportToPdf(files: AudioFileInfo[]) {
+export async function exportToPdf(files: AudioFileInfo[]) {
   const doc = new jsPDF();
   const now = new Date();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -49,5 +52,34 @@ export function exportToPdf(files: AudioFileInfo[]) {
     tableLineWidth: 0.1,
   });
 
-  doc.save(`bpm_export_${dateStr}.pdf`);
+  const fileName = `bpm_export_${dateStr}.pdf`;
+
+  if (isNativePlatform()) {
+    try {
+      const base64 = doc.output('datauristring').split(',')[1];
+      await Filesystem.writeFile({
+        path: `Download/${fileName}`,
+        data: base64,
+        directory: Directory.ExternalStorage,
+        recursive: true,
+      });
+      toast.success(`PDF exporté dans Download/${fileName}`);
+    } catch (err: any) {
+      // Fallback: try Documents directory
+      try {
+        const base64 = doc.output('datauristring').split(',')[1];
+        await Filesystem.writeFile({
+          path: fileName,
+          data: base64,
+          directory: Directory.Documents,
+          recursive: true,
+        });
+        toast.success(`PDF exporté dans Documents/${fileName}`);
+      } catch (err2: any) {
+        toast.error('Erreur export PDF: ' + (err2?.message || err2));
+      }
+    }
+  } else {
+    doc.save(fileName);
+  }
 }
