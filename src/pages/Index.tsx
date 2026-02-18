@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Download, Trash2, StopCircle, Activity, FolderSync, RefreshCw, Music } from 'lucide-react';
+import { FolderOpen, Download, Trash2, StopCircle, Activity, FolderSync, RefreshCw, Music, Headphones } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { AnalysisProgress } from '@/components/AnalysisProgress';
@@ -8,6 +8,7 @@ import { FilterBar } from '@/components/FilterBar';
 import { AudioFileRow } from '@/components/AudioFileRow';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { RenameDialog } from '@/components/RenameDialog';
+import { HarmonicMixView } from '@/components/HarmonicMixView';
 import { exportToPdf } from '@/lib/pdf-export';
 import { isNativePlatform } from '@/lib/native-file-service';
 import { camelotSortValue } from '@/lib/key-utils';
@@ -37,6 +38,7 @@ const Index = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [showHarmonicMix, setShowHarmonicMix] = useState(false);
 
   const hasKeys = files.some(f => f.keyStatus === 'done');
   const bpmDoneCount = files.filter(f => f.status === 'done').length;
@@ -154,6 +156,21 @@ const Index = () => {
   const hasFiles = files.length > 0;
   const isWorking = isAnalyzing || isAnalyzingKeys;
 
+  if (showHarmonicMix) {
+    return (
+      <>
+        <HarmonicMixView
+          files={files}
+          onBack={() => setShowHarmonicMix(false)}
+          onPlay={handlePlay}
+          onStop={handleStopPlayer}
+          playingId={playingId}
+        />
+        <MiniPlayer file={playingFile} fileName={playingName} isPlaying={isPlaying} onStop={handleStopPlayer} onToggle={handleTogglePlayer} />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <input
@@ -242,6 +259,15 @@ const Index = () => {
               >
                 <Music className="h-4 w-4 mr-2" />
                 Analyser les tonalités (Keys)
+              </Button>
+            )}
+            {hasKeys && (
+              <Button
+                onClick={() => setShowHarmonicMix(true)}
+                className="h-12 text-sm col-span-2 bg-primary/90 hover:bg-primary"
+              >
+                <Headphones className="h-4 w-4 mr-2" />
+                🎧 Harmonic Mix
               </Button>
             )}
             <Button
