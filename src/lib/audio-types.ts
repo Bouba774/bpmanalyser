@@ -6,13 +6,18 @@ export interface AudioFileInfo {
   size: number;
   duration: number;
   bpm: number | null;
+  key: string | null;         // e.g. "F# minor"
+  camelot: string | null;     // e.g. "11A"
+  keyConfidence: number | null;
+  keyStatus: 'idle' | 'analyzing' | 'done' | 'error';
   status: 'pending' | 'analyzing' | 'done' | 'error';
   error?: string;
+  keyError?: string;
   file: File;
-  safUri?: string; // SAF document URI for native rename
+  safUri?: string;
 }
 
-export type SortKey = 'name' | 'bpm' | 'duration' | 'format';
+export type SortKey = 'name' | 'bpm' | 'duration' | 'format' | 'key' | 'camelot';
 export type SortDirection = 'asc' | 'desc';
 
 export interface SortConfig {
@@ -24,6 +29,9 @@ export interface FilterConfig {
   search: string;
   bpmMin: number | null;
   bpmMax: number | null;
+  keyFilter: string | null;   // specific key like "F# minor"
+  modeFilter: 'major' | 'minor' | null;
+  camelotFilter: string | null; // e.g. "8A"
 }
 
 export const BPM_GROUPS = [

@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { AudioFileInfo, formatDuration, getBpmGroup, getBpmColor } from '@/lib/audio-types';
-import { Music, Loader2, AlertCircle, Play, Pause } from 'lucide-react';
+import { AudioFileInfo, formatDuration, getBpmColor } from '@/lib/audio-types';
+import { Loader2, AlertCircle, Play, Pause, Music } from 'lucide-react';
+import { getKeyColor } from '@/lib/key-utils';
 
 interface AudioFileRowProps {
   file: AudioFileInfo;
@@ -9,10 +9,10 @@ interface AudioFileRowProps {
   playingId: string | null;
   onPlay: (id: string, file: File) => void;
   onStop: () => void;
+  showKey?: boolean;
 }
 
-export function AudioFileRow({ file, index, playingId, onPlay, onStop }: AudioFileRowProps) {
-  const bpmGroup = file.bpm !== null ? getBpmGroup(file.bpm) : null;
+export function AudioFileRow({ file, index, playingId, onPlay, onStop, showKey }: AudioFileRowProps) {
   const isPlaying = playingId === file.id;
 
   const handleTogglePlay = () => {
@@ -23,12 +23,16 @@ export function AudioFileRow({ file, index, playingId, onPlay, onStop }: AudioFi
     }
   };
 
+  const gridCols = showKey
+    ? 'grid-cols-[28px_1fr_60px] sm:grid-cols-[28px_1fr_70px_80px_50px_90px_70px]'
+    : 'grid-cols-[28px_1fr_60px] sm:grid-cols-[28px_1fr_80px_100px_70px_auto]';
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.02, 0.5), duration: 0.25 }}
-      className="grid grid-cols-[28px_1fr_60px] sm:grid-cols-[28px_1fr_80px_100px_70px_auto] gap-2 sm:gap-4 items-center px-3 sm:px-4 py-3 bg-card hover:bg-surface-hover rounded-lg border border-border/50 transition-colors group"
+      className={`grid ${gridCols} gap-2 sm:gap-3 items-center px-3 sm:px-4 py-3 bg-card hover:bg-surface-hover rounded-lg border border-border/50 transition-colors group`}
     >
       {/* Play button */}
       <button
@@ -53,10 +57,7 @@ export function AudioFileRow({ file, index, playingId, onPlay, onStop }: AudioFi
           <AlertCircle className="h-4 w-4 text-destructive mx-auto" />
         )}
         {file.status === 'done' && file.bpm !== null && (
-          <span
-            className="font-mono font-bold text-sm"
-            style={{ color: getBpmColor(file.bpm) }}
-          >
+          <span className="font-mono font-bold text-sm" style={{ color: getBpmColor(file.bpm) }}>
             {file.bpm}
           </span>
         )}
@@ -64,6 +65,43 @@ export function AudioFileRow({ file, index, playingId, onPlay, onStop }: AudioFi
           <span className="text-xs text-muted-foreground">—</span>
         )}
       </div>
+
+      {/* Key + Camelot (shown when showKey) */}
+      {showKey && (
+        <div className="text-center hidden sm:block">
+          {file.keyStatus === 'analyzing' && (
+            <Loader2 className="h-4 w-4 animate-spin text-accent mx-auto" />
+          )}
+          {file.keyStatus === 'error' && (
+            <AlertCircle className="h-4 w-4 text-destructive mx-auto" />
+          )}
+          {file.keyStatus === 'done' && file.key && (
+            <span
+              className="text-xs font-semibold px-1.5 py-0.5 rounded"
+              style={{
+                color: getKeyColor(file.camelot || ''),
+                backgroundColor: `${getKeyColor(file.camelot || '')}15`,
+              }}
+            >
+              {file.camelot}
+            </span>
+          )}
+          {file.keyStatus === 'idle' && (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </div>
+      )}
+
+      {/* Camelot badge on mobile when key shown */}
+      {showKey && (
+        <div className="text-center hidden sm:block">
+          {file.keyStatus === 'done' && file.key && (
+            <span className="text-[11px] font-mono text-muted-foreground truncate">
+              {file.key}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Duration */}
       <div className="text-center font-mono text-sm text-muted-foreground hidden sm:block">
@@ -77,20 +115,22 @@ export function AudioFileRow({ file, index, playingId, onPlay, onStop }: AudioFi
         </span>
       </div>
 
-      {/* BPM Category */}
-      <div className="text-right min-w-[80px] hidden sm:block">
-        {bpmGroup && (
-          <span
-            className="text-xs font-medium px-2 py-1 rounded-full"
-            style={{
-              color: getBpmColor(file.bpm!),
-              backgroundColor: `${getBpmColor(file.bpm!)}15`,
-            }}
-          >
-            {bpmGroup.label}
-          </span>
-        )}
-      </div>
+      {/* BPM Category (only in non-key mode) */}
+      {!showKey && (
+        <div className="text-right min-w-[80px] hidden sm:block">
+          {file.bpm !== null && file.status === 'done' && (
+            <span
+              className="text-xs font-medium px-2 py-1 rounded-full"
+              style={{
+                color: getBpmColor(file.bpm),
+                backgroundColor: `${getBpmColor(file.bpm)}15`,
+              }}
+            >
+              {file.bpm < 90 ? '< 90' : file.bpm <= 110 ? '90–110' : file.bpm <= 125 ? '110–125' : file.bpm <= 140 ? '125–140' : '> 140'} BPM
+            </span>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }
