@@ -64,8 +64,19 @@ export function useAudioAnalyzer() {
       try {
         const result = await detectBpm(audioFiles[i].file);
         setFiles(prev => prev.map(f =>
-          f.id === audioFiles[i].id ? { ...f, bpm: result.bpm, duration: result.duration, status: 'done' } : f
+          f.id === audioFiles[i].id ? { ...f, bpm: result.bpm, duration: result.duration, status: 'done', keyStatus: 'analyzing' } : f
         ));
+        // Auto key detection right after BPM
+        try {
+          const keyResult = await detectKey(audioFiles[i].file);
+          setFiles(prev => prev.map(f =>
+            f.id === audioFiles[i].id ? { ...f, key: keyResult.key, camelot: keyResult.camelot, keyConfidence: keyResult.confidence, keyStatus: 'done' } : f
+          ));
+        } catch {
+          setFiles(prev => prev.map(f =>
+            f.id === audioFiles[i].id ? { ...f, keyStatus: 'error' } : f
+          ));
+        }
       } catch (err) {
         setFiles(prev => prev.map(f =>
           f.id === audioFiles[i].id ? { ...f, status: 'error', error: (err as Error).message } : f
@@ -116,8 +127,20 @@ export function useAudioAnalyzer() {
 
           const bpmResult = await detectBpmFromArrayBuffer(arrayBuffer);
           setFiles(prev => prev.map(f =>
-            f.id === audioFiles[i].id ? { ...f, bpm: bpmResult.bpm, duration: bpmResult.duration, status: 'done' } : f
+            f.id === audioFiles[i].id ? { ...f, bpm: bpmResult.bpm, duration: bpmResult.duration, status: 'done', keyStatus: 'analyzing' } : f
           ));
+          // Auto key detection right after BPM
+          try {
+            const cachedBuf = nativeBufferCache.current.get(audioFiles[i].id);
+            const keyResult = await detectKeyFromArrayBuffer(cachedBuf || arrayBuffer);
+            setFiles(prev => prev.map(f =>
+              f.id === audioFiles[i].id ? { ...f, key: keyResult.key, camelot: keyResult.camelot, keyConfidence: keyResult.confidence, keyStatus: 'done' } : f
+            ));
+          } catch {
+            setFiles(prev => prev.map(f =>
+              f.id === audioFiles[i].id ? { ...f, keyStatus: 'error' } : f
+            ));
+          }
         } catch (err) {
           setFiles(prev => prev.map(f =>
             f.id === audioFiles[i].id ? { ...f, status: 'error', error: (err as Error).message } : f
