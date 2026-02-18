@@ -5,32 +5,48 @@ import { isNativePlatform } from './native-file-service';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { toast } from 'sonner';
 
-export async function exportToPdf(files: AudioFileInfo[]) {
+export async function exportToPdf(files: AudioFileInfo[], includeKeys = false) {
   const doc = new jsPDF();
   const now = new Date();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  
+
   // Title
   doc.setFontSize(20);
   doc.setTextColor(0, 229, 255);
   doc.text('BPM Analyzer — Export', 14, 20);
-  
+
   doc.setFontSize(10);
   doc.setTextColor(150, 150, 150);
   doc.text(`Généré le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR')}`, 14, 28);
   doc.text(`${files.length} fichier(s)`, 14, 34);
 
-  const tableData = files.map((f) => [
-    f.name,
-    f.bpm !== null ? `${f.bpm}` : '—',
-    f.bpm !== null ? getBpmGroup(f.bpm).label : '—',
-    formatDuration(f.duration),
-    f.format.toUpperCase(),
-  ]);
+  const head = includeKeys
+    ? [['Fichier', 'BPM', 'Key', 'Camelot', 'Durée', 'Format']]
+    : [['Fichier', 'BPM', 'Catégorie', 'Durée', 'Format']];
+
+  const tableData = files.map((f) => {
+    if (includeKeys) {
+      return [
+        f.name,
+        f.bpm !== null ? `${f.bpm}` : '—',
+        f.key || '—',
+        f.camelot || '—',
+        formatDuration(f.duration),
+        f.format.toUpperCase(),
+      ];
+    }
+    return [
+      f.name,
+      f.bpm !== null ? `${f.bpm}` : '—',
+      f.bpm !== null ? getBpmGroup(f.bpm).label : '—',
+      formatDuration(f.duration),
+      f.format.toUpperCase(),
+    ];
+  });
 
   autoTable(doc, {
     startY: 40,
-    head: [['Fichier', 'BPM', 'Catégorie', 'Durée', 'Format']],
+    head,
     body: tableData,
     styles: {
       fontSize: 8,
@@ -65,7 +81,6 @@ export async function exportToPdf(files: AudioFileInfo[]) {
       });
       toast.success(`PDF exporté dans Download/${fileName}`);
     } catch (err: any) {
-      // Fallback: try Documents directory
       try {
         const base64 = doc.output('datauristring').split(',')[1];
         await Filesystem.writeFile({

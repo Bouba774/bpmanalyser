@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Download, Trash2, StopCircle, Activity, FolderSync, RefreshCw } from 'lucide-react';
+import { FolderOpen, Download, Trash2, StopCircle, Activity, FolderSync, RefreshCw, Music } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { AnalysisProgress } from '@/components/AnalysisProgress';
@@ -10,6 +10,7 @@ import { MiniPlayer } from '@/components/MiniPlayer';
 import { RenameDialog } from '@/components/RenameDialog';
 import { exportToPdf } from '@/lib/pdf-export';
 import { isNativePlatform } from '@/lib/native-file-service';
+import { camelotSortValue } from '@/lib/key-utils';
 import SAFFolderPicker from '@/plugins/saf-folder-picker';
 import { toast } from 'sonner';
 import {
@@ -21,10 +22,13 @@ import {
 } from '@/lib/audio-types';
 
 const Index = () => {
-  const { files, isAnalyzing, progress, folderUri, scanFiles, pickNativeFolder, stopAnalysis, clearFiles } = useAudioAnalyzer();
+  const {
+    files, isAnalyzing, isAnalyzingKeys, progress, keyProgress,
+    folderUri, scanFiles, pickNativeFolder, analyzeKeys, stopAnalysis, clearFiles,
+  } = useAudioAnalyzer();
   const isNative = isNativePlatform();
   const folderInputRef = useRef<HTMLInputElement>(null);
-  const [filter, setFilter] = useState<FilterConfig>({ search: '', bpmMin: null, bpmMax: null });
+  const [filter, setFilter] = useState<FilterConfig>({ search: '', bpmMin: null, bpmMax: null, keyFilter: null, modeFilter: null, camelotFilter: null });
   const [sort, setSort] = useState<SortConfig>({ key: 'bpm', direction: 'asc' });
   const [viewMode, setViewMode] = useState<'list' | 'grouped'>('list');
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -34,11 +38,12 @@ const Index = () => {
   const [renameOpen, setRenameOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
 
+  const hasKeys = files.some(f => f.keyStatus === 'done');
+  const bpmDoneCount = files.filter(f => f.status === 'done').length;
+  const canAnalyzeKeys = bpmDoneCount > 0 && !isAnalyzing && !isAnalyzingKeys;
+
   const handleScanMediaStore = useCallback(async () => {
-    if (!folderUri) {
-      toast.error('Aucun dossier sélectionné');
-      return;
-    }
+    if (!folderUri) { toast.error('Aucun dossier sélectionné'); return; }
     setIsScanning(true);
     try {
       const result = await SAFFolderPicker.scanFolder({ folderUri });
@@ -54,15 +59,12 @@ const Index = () => {
     const audioFile = files.find(f => f.id === id);
     if (!audioFile) return;
 
-    // On native, file.file is null — load content via SAF
     if (isNative && audioFile.safUri && (!file || file.size === 0)) {
       try {
         const content = await SAFFolderPicker.readFileContent({ uri: audioFile.safUri });
         const binaryStr = atob(content.data);
         const bytes = new Uint8Array(binaryStr.length);
-        for (let j = 0; j < binaryStr.length; j++) {
-          bytes[j] = binaryStr.charCodeAt(j);
-        }
+        for (let j = 0; j < binaryStr.length; j++) bytes[j] = binaryStr.charCodeAt(j);
         const mimeType = audioFile.format === 'mp3' ? 'audio/mpeg' : `audio/${audioFile.format}`;
         const blob = new Blob([bytes], { type: mimeType });
         const nativeFile = new File([blob], audioFile.name, { type: mimeType });
@@ -70,7 +72,7 @@ const Index = () => {
         setPlayingFile(nativeFile);
         setPlayingName(audioFile.name);
         setIsPlaying(true);
-      } catch (err: any) {
+      } catch {
         toast.error('Impossible de lire le fichier audio');
       }
       return;
@@ -94,48 +96,36 @@ const Index = () => {
   }, []);
 
   const handleFolderSelect = () => {
-    if (isNative) {
-      pickNativeFolder();
-    } else {
-      folderInputRef.current?.click();
-    }
+    if (isNative) pickNativeFolder();
+    else folderInputRef.current?.click();
   };
 
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      scanFiles(e.target.files);
-    }
+    if (e.target.files && e.target.files.length > 0) scanFiles(e.target.files);
   };
 
   const filteredAndSorted = useMemo(() => {
     let result = [...files];
 
-    // Filter
     if (filter.search) {
       const q = filter.search.toLowerCase();
       result = result.filter(f => f.name.toLowerCase().includes(q));
     }
-    if (filter.bpmMin !== null) {
-      result = result.filter(f => f.bpm !== null && f.bpm >= filter.bpmMin!);
-    }
-    if (filter.bpmMax !== null) {
-      result = result.filter(f => f.bpm !== null && f.bpm <= filter.bpmMax!);
-    }
+    if (filter.bpmMin !== null) result = result.filter(f => f.bpm !== null && f.bpm >= filter.bpmMin!);
+    if (filter.bpmMax !== null) result = result.filter(f => f.bpm !== null && f.bpm <= filter.bpmMax!);
+    if (filter.modeFilter) result = result.filter(f => f.key?.includes(filter.modeFilter!));
+    if (filter.camelotFilter) result = result.filter(f => f.camelot === filter.camelotFilter);
 
-    // Sort
     result.sort((a, b) => {
       const dir = sort.direction === 'asc' ? 1 : -1;
       switch (sort.key) {
-        case 'bpm':
-          return ((a.bpm ?? 999) - (b.bpm ?? 999)) * dir;
-        case 'name':
-          return a.name.localeCompare(b.name) * dir;
-        case 'duration':
-          return (a.duration - b.duration) * dir;
-        case 'format':
-          return a.format.localeCompare(b.format) * dir;
-        default:
-          return 0;
+        case 'bpm': return ((a.bpm ?? 999) - (b.bpm ?? 999)) * dir;
+        case 'name': return a.name.localeCompare(b.name) * dir;
+        case 'duration': return (a.duration - b.duration) * dir;
+        case 'format': return a.format.localeCompare(b.format) * dir;
+        case 'key': return (a.key || 'ZZZ').localeCompare(b.key || 'ZZZ') * dir;
+        case 'camelot': return (camelotSortValue(a.camelot || '') - camelotSortValue(b.camelot || '')) * dir;
+        default: return 0;
       }
     });
 
@@ -161,12 +151,14 @@ const Index = () => {
     return groups.filter(g => g.files.length > 0);
   }, [filteredAndSorted]);
 
-  const doneCount = files.filter(f => f.status === 'done').length;
   const hasFiles = files.length > 0;
+
+  const headerGridCols = hasKeys
+    ? 'grid-cols-[28px_1fr_60px] sm:grid-cols-[28px_1fr_70px_80px_50px_90px_70px]'
+    : 'grid-cols-[28px_1fr_60px] sm:grid-cols-[28px_1fr_80px_100px_70px_auto]';
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hidden folder input */}
       <input
         ref={folderInputRef}
         type="file"
@@ -188,8 +180,19 @@ const Index = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {hasFiles && !isAnalyzing && (
+            {hasFiles && !isAnalyzing && !isAnalyzingKeys && (
               <>
+                {canAnalyzeKeys && !hasKeys && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={analyzeKeys}
+                    className="border-accent/50 text-accent hover:bg-accent/10"
+                  >
+                    <Music className="h-4 w-4 mr-1" />
+                    Keys
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -201,7 +204,7 @@ const Index = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => setRenameOpen(true)}
-                  disabled={doneCount === 0}
+                  disabled={bpmDoneCount === 0}
                 >
                   <FolderSync className="h-4 w-4 mr-1" />
                   Réorganiser
@@ -209,19 +212,14 @@ const Index = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => exportToPdf(filteredAndSorted)}
-                  disabled={doneCount === 0}
+                  onClick={() => exportToPdf(filteredAndSorted, hasKeys)}
+                  disabled={bpmDoneCount === 0}
                 >
                   <Download className="h-4 w-4 mr-1" />
                   PDF
                 </Button>
                 {isNative && folderUri && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleScanMediaStore}
-                    disabled={isScanning}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleScanMediaStore} disabled={isScanning}>
                     <RefreshCw className={`h-4 w-4 mr-1 ${isScanning ? 'animate-spin' : ''}`} />
                     Sync
                   </Button>
@@ -231,7 +229,7 @@ const Index = () => {
                 </Button>
               </>
             )}
-            {isAnalyzing && (
+            {(isAnalyzing || isAnalyzingKeys) && (
               <Button variant="destructive" size="sm" onClick={stopAnalysis}>
                 <StopCircle className="h-4 w-4 mr-1" />
                 Stop
@@ -243,12 +241,24 @@ const Index = () => {
       </header>
 
       <main className="container px-4 py-6 space-y-6">
-        {/* Progress */}
+        {/* BPM Progress */}
         {progress.total > 0 && (
           <AnalysisProgress
             current={progress.current}
             total={progress.total}
             isAnalyzing={isAnalyzing}
+            label="BPM"
+          />
+        )}
+
+        {/* Key Progress */}
+        {keyProgress.total > 0 && (
+          <AnalysisProgress
+            current={keyProgress.current}
+            total={keyProgress.total}
+            isAnalyzing={isAnalyzingKeys}
+            label="Key"
+            color="hsl(var(--accent))"
           />
         )}
 
@@ -268,7 +278,7 @@ const Index = () => {
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold">BPM Analyzer</h2>
               <p className="text-muted-foreground max-w-md">
-                Sélectionnez un dossier contenant vos fichiers audio pour détecter automatiquement les BPM.
+                Sélectionnez un dossier contenant vos fichiers audio pour détecter automatiquement les BPM et tonalités.
               </p>
               <p className="text-xs text-muted-foreground font-mono">
                 MP3 · WAV · FLAC · AAC · M4A
@@ -288,21 +298,23 @@ const Index = () => {
             sort={sort}
             onFilterChange={setFilter}
             onSortChange={setSort}
+            hasKeys={hasKeys}
           />
         )}
 
         {/* Stats */}
-        {hasFiles && doneCount > 0 && (
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        {hasFiles && bpmDoneCount > 0 && (
+          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
             <span>{filteredAndSorted.length} fichier(s)</span>
-            {doneCount > 0 && (
-              <span className="font-mono text-primary">
-                Moy: {Math.round(
-                  filteredAndSorted
-                    .filter(f => f.bpm !== null)
-                    .reduce((sum, f) => sum + f.bpm!, 0) /
-                  (filteredAndSorted.filter(f => f.bpm !== null).length || 1)
-                )} BPM
+            <span className="font-mono text-primary">
+              Moy: {Math.round(
+                filteredAndSorted.filter(f => f.bpm !== null).reduce((sum, f) => sum + f.bpm!, 0) /
+                (filteredAndSorted.filter(f => f.bpm !== null).length || 1)
+              )} BPM
+            </span>
+            {hasKeys && (
+              <span className="font-mono text-accent">
+                {files.filter(f => f.keyStatus === 'done').length} key(s) détectée(s)
               </span>
             )}
           </div>
@@ -311,17 +323,18 @@ const Index = () => {
         {/* List View */}
         {hasFiles && viewMode === 'list' && (
           <div className="space-y-1">
-            {/* Header row */}
-            <div className="grid grid-cols-[28px_1fr_60px] sm:grid-cols-[28px_1fr_80px_100px_70px_auto] gap-2 sm:gap-4 px-3 sm:px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <div className={`grid ${headerGridCols} gap-2 sm:gap-3 px-3 sm:px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider`}>
               <span></span>
               <span>Fichier</span>
               <span className="text-center">BPM</span>
+              {hasKeys && <span className="text-center hidden sm:block">Camelot</span>}
+              {hasKeys && <span className="text-center hidden sm:block">Key</span>}
               <span className="text-center hidden sm:block">Durée</span>
               <span className="text-center hidden sm:block">Format</span>
-              <span className="text-right hidden sm:block">Catégorie</span>
+              {!hasKeys && <span className="text-right hidden sm:block">Catégorie</span>}
             </div>
             {filteredAndSorted.map((file, i) => (
-              <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} />
+              <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} showKey={hasKeys} />
             ))}
           </div>
         )}
@@ -332,20 +345,13 @@ const Index = () => {
             {groupedFiles.map((group) => (
               <div key={group.label} className="space-y-2">
                 <div className="flex items-center gap-3 px-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: group.color }}
-                  />
-                  <h3 className="text-sm font-bold" style={{ color: group.color }}>
-                    {group.label}
-                  </h3>
-                  <span className="text-xs text-muted-foreground">
-                    ({group.files.length})
-                  </span>
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: group.color }} />
+                  <h3 className="text-sm font-bold" style={{ color: group.color }}>{group.label}</h3>
+                  <span className="text-xs text-muted-foreground">({group.files.length})</span>
                 </div>
                 <div className="space-y-1">
                   {group.files.map((file, i) => (
-                    <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} />
+                    <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} showKey={hasKeys} />
                   ))}
                 </div>
               </div>
@@ -354,19 +360,8 @@ const Index = () => {
         )}
       </main>
 
-      <RenameDialog
-        open={renameOpen}
-        onOpenChange={setRenameOpen}
-        files={files}
-      />
-
-      <MiniPlayer
-        file={playingFile}
-        fileName={playingName}
-        isPlaying={isPlaying}
-        onStop={handleStopPlayer}
-        onToggle={handleTogglePlayer}
-      />
+      <RenameDialog open={renameOpen} onOpenChange={setRenameOpen} files={files} />
+      <MiniPlayer file={playingFile} fileName={playingName} isPlaying={isPlaying} onStop={handleStopPlayer} onToggle={handleTogglePlayer} />
     </div>
   );
 };

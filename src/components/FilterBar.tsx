@@ -1,4 +1,4 @@
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { Search, SlidersHorizontal, Music } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { FilterConfig, SortConfig, SortKey } from '@/lib/audio-types';
 import {
@@ -8,12 +8,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ALL_CAMELOT_CODES } from '@/lib/key-utils';
 
 interface FilterBarProps {
   filter: FilterConfig;
   sort: SortConfig;
   onFilterChange: (filter: FilterConfig) => void;
   onSortChange: (sort: SortConfig) => void;
+  hasKeys?: boolean;
 }
 
 const sortOptions: { value: string; label: string }[] = [
@@ -23,9 +25,13 @@ const sortOptions: { value: string; label: string }[] = [
   { value: 'name-desc', label: 'Nom Z-A' },
   { value: 'duration-asc', label: 'Durée ↑' },
   { value: 'duration-desc', label: 'Durée ↓' },
+  { value: 'key-asc', label: 'Key A-Z' },
+  { value: 'key-desc', label: 'Key Z-A' },
+  { value: 'camelot-asc', label: 'Camelot ↑' },
+  { value: 'camelot-desc', label: 'Camelot ↓' },
 ];
 
-export function FilterBar({ filter, sort, onFilterChange, onSortChange }: FilterBarProps) {
+export function FilterBar({ filter, sort, onFilterChange, onSortChange, hasKeys }: FilterBarProps) {
   const handleSortChange = (value: string) => {
     const [key, direction] = value.split('-') as [SortKey, 'asc' | 'desc'];
     onSortChange({ key, direction });
@@ -67,6 +73,42 @@ export function FilterBar({ filter, sort, onFilterChange, onSortChange }: Filter
           className="w-20 bg-secondary border-border text-center font-mono text-sm"
         />
       </div>
+
+      {/* Mode Filter */}
+      {hasKeys && (
+        <Select
+          value={filter.modeFilter ?? 'all'}
+          onValueChange={(v) => onFilterChange({ ...filter, modeFilter: v === 'all' ? null : v as 'major' | 'minor' })}
+        >
+          <SelectTrigger className="w-[110px] bg-secondary border-border">
+            <Music className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous</SelectItem>
+            <SelectItem value="major">Major</SelectItem>
+            <SelectItem value="minor">Minor</SelectItem>
+          </SelectContent>
+        </Select>
+      )}
+
+      {/* Camelot Filter */}
+      {hasKeys && (
+        <Select
+          value={filter.camelotFilter ?? 'all'}
+          onValueChange={(v) => onFilterChange({ ...filter, camelotFilter: v === 'all' ? null : v })}
+        >
+          <SelectTrigger className="w-[100px] bg-secondary border-border">
+            <SelectValue placeholder="Camelot" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Camelot</SelectItem>
+            {ALL_CAMELOT_CODES.map(code => (
+              <SelectItem key={code} value={code}>{code}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       {/* Sort */}
       <Select value={`${sort.key}-${sort.direction}`} onValueChange={handleSortChange}>
