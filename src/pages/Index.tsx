@@ -152,13 +152,10 @@ const Index = () => {
   }, [filteredAndSorted]);
 
   const hasFiles = files.length > 0;
-
-  const headerGridCols = hasKeys
-    ? 'grid-cols-[28px_1fr_60px] sm:grid-cols-[28px_1fr_70px_80px_50px_90px_70px]'
-    : 'grid-cols-[28px_1fr_60px] sm:grid-cols-[28px_1fr_80px_100px_70px_auto]';
+  const isWorking = isAnalyzing || isAnalyzingKeys;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <input
         ref={folderInputRef}
         type="file"
@@ -168,79 +165,22 @@ const Index = () => {
         onChange={handleFilesSelected}
       />
 
-      {/* Header */}
-      <header className="border-b border-border sticky top-0 z-10 bg-background/80 backdrop-blur-xl">
-        <div className="container flex items-center justify-between h-16 px-4">
-          <div className="flex items-center gap-3">
-            <Activity className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">
+      {/* Header - compact, sticky */}
+      <header className="border-b border-border sticky top-0 z-30 bg-background/90 backdrop-blur-xl safe-area-top">
+        <div className="flex items-center justify-between h-14 px-4">
+          <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
+            <h1 className="text-lg font-bold">
               <span className="gradient-text">BPM</span>{' '}
               <span className="text-foreground">Analyzer</span>
             </h1>
           </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {hasFiles && !isAnalyzing && !isAnalyzingKeys && (
-              <>
-                {canAnalyzeKeys && !hasKeys && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={analyzeKeys}
-                    className="border-accent/50 text-accent hover:bg-accent/10"
-                  >
-                    <Music className="h-4 w-4 mr-1" />
-                    Keys
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setViewMode(v => v === 'list' ? 'grouped' : 'list')}
-                >
-                  {viewMode === 'list' ? 'Grouper' : 'Liste'}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setRenameOpen(true)}
-                  disabled={bpmDoneCount === 0}
-                >
-                  <FolderSync className="h-4 w-4 mr-1" />
-                  Réorganiser
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => exportToPdf(filteredAndSorted, hasKeys)}
-                  disabled={bpmDoneCount === 0}
-                >
-                  <Download className="h-4 w-4 mr-1" />
-                  PDF
-                </Button>
-                {isNative && folderUri && (
-                  <Button variant="outline" size="sm" onClick={handleScanMediaStore} disabled={isScanning}>
-                    <RefreshCw className={`h-4 w-4 mr-1 ${isScanning ? 'animate-spin' : ''}`} />
-                    Sync
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" onClick={clearFiles}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </>
-            )}
-            {(isAnalyzing || isAnalyzingKeys) && (
-              <Button variant="destructive" size="sm" onClick={stopAnalysis}>
-                <StopCircle className="h-4 w-4 mr-1" />
-                Stop
-              </Button>
-            )}
-            <span className="text-xs text-muted-foreground italic">By ALPHA FX</span>
-          </div>
+          <span className="text-xs text-muted-foreground italic">By ALPHA FX</span>
         </div>
       </header>
 
-      <main className="container px-4 py-6 space-y-6">
+      {/* Main scrollable content */}
+      <main className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-24">
         {/* BPM Progress */}
         {progress.total > 0 && (
           <AnalysisProgress
@@ -267,28 +207,104 @@ const Index = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center py-32 space-y-6"
+            className="flex flex-col items-center justify-center py-20 space-y-6"
           >
             <div className="relative">
-              <div className="w-24 h-24 rounded-full bg-secondary flex items-center justify-center">
-                <Activity className="h-10 w-10 text-primary animate-pulse-glow" />
+              <div className="w-20 h-20 rounded-full bg-secondary flex items-center justify-center">
+                <Activity className="h-9 w-9 text-primary animate-pulse-glow" />
               </div>
               <div className="absolute inset-0 rounded-full bg-primary/10 blur-2xl" />
             </div>
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold">BPM Analyzer</h2>
-              <p className="text-muted-foreground max-w-md">
-                Sélectionnez un dossier contenant vos fichiers audio pour détecter automatiquement les BPM et tonalités.
+            <div className="text-center space-y-2 px-4">
+              <h2 className="text-xl font-bold">BPM Analyzer</h2>
+              <p className="text-muted-foreground text-sm">
+                Sélectionnez un dossier pour détecter les BPM et tonalités de vos fichiers audio.
               </p>
               <p className="text-xs text-muted-foreground font-mono">
                 MP3 · WAV · FLAC · AAC · M4A
               </p>
             </div>
-            <Button onClick={handleFolderSelect} size="lg" className="glow-border">
+            <Button onClick={handleFolderSelect} size="lg" className="glow-border w-full max-w-xs h-14 text-base">
               <FolderOpen className="h-5 w-5 mr-2" />
               Sélectionner un dossier
             </Button>
           </motion.div>
+        )}
+
+        {/* Action Buttons - full width, stacked on mobile */}
+        {hasFiles && !isWorking && (
+          <div className="grid grid-cols-2 gap-2">
+            {canAnalyzeKeys && !hasKeys && (
+              <Button
+                onClick={analyzeKeys}
+                variant="outline"
+                className="h-12 text-sm border-accent/50 text-accent hover:bg-accent/10 col-span-2"
+              >
+                <Music className="h-4 w-4 mr-2" />
+                Analyser les tonalités (Keys)
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="h-12 text-sm"
+              onClick={() => setViewMode(v => v === 'list' ? 'grouped' : 'list')}
+            >
+              {viewMode === 'list' ? 'Grouper par BPM' : 'Vue liste'}
+            </Button>
+            <Button
+              variant="outline"
+              className="h-12 text-sm"
+              onClick={() => setRenameOpen(true)}
+              disabled={bpmDoneCount === 0}
+            >
+              <FolderSync className="h-4 w-4 mr-2" />
+              Réorganiser
+            </Button>
+            <Button
+              variant="outline"
+              className="h-12 text-sm"
+              onClick={() => exportToPdf(filteredAndSorted, hasKeys)}
+              disabled={bpmDoneCount === 0}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export PDF
+            </Button>
+            {isNative && folderUri && (
+              <Button
+                variant="outline"
+                className="h-12 text-sm"
+                onClick={handleScanMediaStore}
+                disabled={isScanning}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${isScanning ? 'animate-spin' : ''}`} />
+                Sync MediaStore
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="h-12 text-sm text-destructive border-destructive/30 hover:bg-destructive/10"
+              onClick={clearFiles}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Effacer
+            </Button>
+            <Button
+              variant="outline"
+              className="h-12 text-sm"
+              onClick={handleFolderSelect}
+            >
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Changer dossier
+            </Button>
+          </div>
+        )}
+
+        {/* Stop button when working */}
+        {isWorking && (
+          <Button variant="destructive" className="w-full h-12 text-sm" onClick={stopAnalysis}>
+            <StopCircle className="h-4 w-4 mr-2" />
+            Arrêter l'analyse
+          </Button>
         )}
 
         {/* Filters */}
@@ -304,7 +320,7 @@ const Index = () => {
 
         {/* Stats */}
         {hasFiles && bpmDoneCount > 0 && (
-          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
             <span>{filteredAndSorted.length} fichier(s)</span>
             <span className="font-mono text-primary">
               Moy: {Math.round(
@@ -314,25 +330,15 @@ const Index = () => {
             </span>
             {hasKeys && (
               <span className="font-mono text-accent">
-                {files.filter(f => f.keyStatus === 'done').length} key(s) détectée(s)
+                {files.filter(f => f.keyStatus === 'done').length} key(s)
               </span>
             )}
           </div>
         )}
 
-        {/* List View */}
+        {/* List View - card layout */}
         {hasFiles && viewMode === 'list' && (
-          <div className="space-y-1">
-            <div className={`grid ${headerGridCols} gap-2 sm:gap-3 px-3 sm:px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider`}>
-              <span></span>
-              <span>Fichier</span>
-              <span className="text-center">BPM</span>
-              {hasKeys && <span className="text-center hidden sm:block">Camelot</span>}
-              {hasKeys && <span className="text-center hidden sm:block">Key</span>}
-              <span className="text-center hidden sm:block">Durée</span>
-              <span className="text-center hidden sm:block">Format</span>
-              {!hasKeys && <span className="text-right hidden sm:block">Catégorie</span>}
-            </div>
+          <div className="space-y-2">
             {filteredAndSorted.map((file, i) => (
               <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} showKey={hasKeys} />
             ))}
@@ -344,12 +350,12 @@ const Index = () => {
           <div className="space-y-6">
             {groupedFiles.map((group) => (
               <div key={group.label} className="space-y-2">
-                <div className="flex items-center gap-3 px-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: group.color }} />
+                <div className="flex items-center gap-3 px-1">
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
                   <h3 className="text-sm font-bold" style={{ color: group.color }}>{group.label}</h3>
                   <span className="text-xs text-muted-foreground">({group.files.length})</span>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {group.files.map((file, i) => (
                     <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} showKey={hasKeys} />
                   ))}
