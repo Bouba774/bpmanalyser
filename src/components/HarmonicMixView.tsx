@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Headphones, Play, Square, Download, Zap, ChevronDown, ChevronUp, Music } from 'lucide-react';
+import { ArrowLeft, Headphones, Play, Square, Download, Zap, ChevronDown, ChevronUp, Music, FolderSync, Circle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AudioFileInfo, formatDuration } from '@/lib/audio-types';
 import {
@@ -11,6 +11,9 @@ import {
 } from '@/lib/harmonic-mix-engine';
 import { getKeyColor } from '@/lib/key-utils';
 import { exportHarmonicPdf } from '@/lib/pdf-export-harmonic';
+import { CamelotWheel } from '@/components/CamelotWheel';
+import { isNativePlatform, renameFilesNatively } from '@/lib/native-file-service';
+import { toast } from 'sonner';
 
 interface HarmonicMixViewProps {
   files: AudioFileInfo[];
@@ -46,6 +49,9 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
   const [mode, setMode] = useState<MixMode>('flexible');
   const [bpmTolerance, setBpmTolerance] = useState(8);
   const [showSettings, setShowSettings] = useState(false);
+  const [showWheel, setShowWheel] = useState(true);
+  const [isReordering, setIsReordering] = useState(false);
+  const isNative = isNativePlatform();
 
   const playlist: HarmonicPlaylist = useMemo(
     () => generateHarmonicPlaylist(files, mode, bpmTolerance),
@@ -57,6 +63,36 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
   const handleExportPdf = useCallback(() => {
     exportHarmonicPdf(playlist);
   }, [playlist]);
+
+  const handleReorderFiles = useCallback(async () => {
+    if (!isNative || playlist.tracks.length === 0) {
+      toast.error('Renommage natif requis (Capacitor)');
+      return;
+    }
+    setIsReordering(true);
+    try {
+      const filesToRename = playlist.tracks.map((track, i) => ({
+        name: track.name,
+        bpm: track.bpm!,
+        uri: track.safUri || track.path,
+      }));
+      const options = {
+        format: 'numeric_bpm' as const,
+        sortOrder: 'asc' as const,
+      };
+      // Rename using harmonic order index
+      const res = await renameFilesNatively(filesToRename, options);
+      if (res.errors.length === 0) {
+        toast.success(`${res.success} fichier(s) réorganisé(s) selon le mix harmonique`);
+      } else {
+        toast.error(`${res.errors.length} erreur(s) lors de la réorganisation`);
+      }
+    } catch (e: any) {
+      toast.error('Erreur: ' + (e?.message || e));
+    } finally {
+      setIsReordering(false);
+    }
+  }, [isNative, playlist.tracks]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -88,6 +124,35 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
           )}
         </div>
 
+        {/* Camelot Wheel */}
+        {playlist.tracks.length > 0 && (
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <button
+              onClick={() => setShowWheel(w => !w)}
+              className="flex items-center justify-between w-full p-3 text-sm font-semibold"
+            >
+              <div className="flex items-center gap-2">
+                <Circle className="h-4 w-4 text-primary" />
+                Roue Camelot
+              </div>
+              {showWheel ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            <AnimatePresence>
+              {showWheel && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="px-3 pb-3">
+                    <CamelotWheel tracks={playlist.tracks} transitions={playlist.transitions} />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
         {/* Mode selector */}
         <div className="grid grid-cols-3 gap-2">
           {(['strict', 'flexible', 'creative'] as MixMode[]).map(m => (
@@ -167,6 +232,15 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
           >
             <Play className="h-4 w-4 mr-2" />
             Lancer le mix
+          </Button>
+          <Button
+            onClick={handleReorderFiles}
+            variant="outline"
+            className="h-12 text-sm col-span-2 border-primary/30 text-primary hover:bg-primary/10"
+            disabled={playlist.tracks.length === 0 || isReordering}
+          >
+            <FolderSync className={`h-4 w-4 mr-2 ${isReordering ? 'animate-spin' : ''}`} />
+            {isReordering ? 'Réorganisation…' : 'Réorganiser fichiers selon le mix'}
           </Button>
         </div>
 
