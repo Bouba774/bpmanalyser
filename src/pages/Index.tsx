@@ -12,7 +12,9 @@ import { FilterBar } from '@/components/FilterBar';
 import { AudioFileRow } from '@/components/AudioFileRow';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { RenameDialog } from '@/components/RenameDialog';
-import { HarmonicMixView } from '@/components/HarmonicMixView';
+
+/* ✅ FIX IMPORT (default export) */
+import HarmonicMixView from '@/components/HarmonicMixView';
 
 import { exportToPdf } from '@/lib/pdf-export';
 import { isNativePlatform } from '@/lib/native-file-service';
