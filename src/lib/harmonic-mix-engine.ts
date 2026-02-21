@@ -1,10 +1,13 @@
 /**
  * Harmonic Flow Engine™ — Intelligent DJ setlist generator
  * Builds an optimal playback order based on Camelot wheel + BPM compatibility.
+ * + Thermal Energy Sorting (Hot/Cold)
  */
+
 import { AudioFileInfo } from './audio-types';
 
 export type MixMode = 'strict' | 'flexible' | 'creative';
+export type EnergyMode = 'harmonic' | 'hot-cold' | 'cold-hot';
 export type TransitionQuality = 'perfect' | 'good' | 'risky';
 
 export interface HarmonicTransition {
@@ -12,7 +15,7 @@ export interface HarmonicTransition {
   to: AudioFileInfo;
   score: number;
   bpmDelta: number;
-  camelotRelation: string; // e.g. "Same Key", "Relative", "+1", etc.
+  camelotRelation: string;
   quality: TransitionQuality;
 }
 
@@ -21,12 +24,15 @@ export interface HarmonicPlaylist {
   transitions: HarmonicTransition[];
   totalScore: number;
   avgScore: number;
+  mode: EnergyMode;
 }
 
 interface CamelotParsed {
   num: number;
   letter: 'A' | 'B';
 }
+
+/* ---------------- CAMEL0T ---------------- */
 
 function parseCamelot(code: string): CamelotParsed | null {
   const m = code.match(/^(\d{1,2})([AB])$/);
@@ -35,39 +41,73 @@ function parseCamelot(code: string): CamelotParsed | null {
 }
 
 function camelotDistance(a: CamelotParsed, b: CamelotParsed): { dist: number; relation: string } {
-  // Same key
   if (a.num === b.num && a.letter === b.letter) return { dist: 0, relation: 'Même clé' };
-  // Relative key (A↔B same number)
   if (a.num === b.num && a.letter !== b.letter) return { dist: 0.5, relation: 'Relative' };
-  
+
   const diff = Math.abs(a.num - b.num);
   const wrapped = Math.min(diff, 12 - diff);
-  
+
   if (a.letter === b.letter) {
     if (wrapped === 1) return { dist: 1, relation: '±1 Camelot' };
     if (wrapped === 2) return { dist: 2, relation: '±2 Camelot' };
     return { dist: wrapped, relation: `±${wrapped} Camelot` };
   }
-  
-  // Cross mode
+
   if (wrapped === 1) return { dist: 1.5, relation: '±1 Cross' };
-  if (wrapped === 0) return { dist: 0.5, relation: 'Relative' }; // already covered above
+  if (wrapped === 0) return { dist: 0.5, relation: 'Relative' };
   return { dist: wrapped + 0.5, relation: `±${wrapped} Cross` };
 }
 
-/**
- * Score a single transition between two tracks.
- */
+/* ---------------- THERMAL ENERGY ---------------- */
+
+// 🔥 Thermal / Energy scoring system
+export function thermalScore(track: AudioFileInfo): number {
+  let score = 0;
+
+  if (!track.camelot) return 0;
+
+  // Major / Minor
+  if (track.camelot.endsWith('B')) score += 2; // Major = chaud
+  if (track.camelot.endsWith('A')) score -= 2; // Minor = froid
+
+  // Camelot zone
+  const parsed = parseCamelot(track.camelot);
+  if (parsed) {
+    if (parsed.num >= 9) score += 2;   // bright zone
+    if (parsed.num <= 4) score -= 2;   // dark zone
+  }
+
+  // BPM energy
+  if (track.bpm !== null) {
+    if (track.bpm > 128) score += 3;
+    else if (track.bpm > 122) score += 2;
+    else if (track.bpm < 100) score -= 3;
+    else if (track.bpm < 110) score -= 2;
+  }
+
+  return score;
+}
+
+export function sortHotToCold(tracks: AudioFileInfo[]) {
+  return [...tracks].sort((a, b) => thermalScore(b) - thermalScore(a));
+}
+
+export function sortColdToHot(tracks: AudioFileInfo[]) {
+  return [...tracks].sort((a, b) => thermalScore(a) - thermalScore(b));
+}
+
+/* ---------------- TRANSITION SCORING ---------------- */
+
 function scoreTransition(
   from: AudioFileInfo,
   to: AudioFileInfo,
   mode: MixMode,
   bpmTolerance: number,
 ): { score: number; bpmDelta: number; relation: string; quality: TransitionQuality } {
+
   let score = 0;
   const bpmDelta = Math.abs((from.bpm ?? 0) - (to.bpm ?? 0));
 
-  // --- Harmonic scoring ---
   const ca = from.camelot ? parseCamelot(from.camelot) : null;
   const cb = to.camelot ? parseCamelot(to.camelot) : null;
   let relation = 'Inconnu';
@@ -75,26 +115,24 @@ function scoreTransition(
   if (ca && cb) {
     const { dist, relation: rel } = camelotDistance(ca, cb);
     relation = rel;
-    if (dist === 0) score += 100;        // Same key
-    else if (dist === 0.5) score += 90;  // Relative
-    else if (dist === 1) score += 80;    // ±1
-    else if (dist === 1.5) score += 60;  // ±1 cross
-    else if (dist === 2) score += 40;    // ±2
-    else score -= 50;                    // clash
+
+    if (dist === 0) score += 100;
+    else if (dist === 0.5) score += 90;
+    else if (dist === 1) score += 80;
+    else if (dist === 1.5) score += 60;
+    else if (dist === 2) score += 40;
+    else score -= 50;
   }
 
-  // --- BPM scoring ---
   if (bpmDelta <= 2) score += 50;
   else if (bpmDelta <= 3) score += 40;
   else if (bpmDelta <= 5) score += 30;
   else if (bpmDelta <= bpmTolerance) score += 10;
   else {
-    // Penalty scales with mode
     const penalty = mode === 'creative' ? 20 : mode === 'flexible' ? 60 : 100;
     score -= penalty;
   }
 
-  // Quality label
   let quality: TransitionQuality;
   if (score >= 120) quality = 'perfect';
   else if (score >= 60) quality = 'good';
@@ -103,35 +141,42 @@ function scoreTransition(
   return { score, bpmDelta, relation, quality };
 }
 
-/**
- * Greedy nearest-neighbour approach to build the optimal playlist.
- * Starts from the best "seed" track (most connections) and greedily picks
- * the highest-scoring next track.
- */
+/* ---------------- PLAYLIST GENERATOR ---------------- */
+
 export function generateHarmonicPlaylist(
   files: AudioFileInfo[],
   mode: MixMode = 'flexible',
   bpmTolerance: number = 8,
+  energyMode: EnergyMode = 'harmonic',
   startTrackId?: string,
 ): HarmonicPlaylist {
-  // Only use tracks with both BPM and Key analysed
-  const eligible = files.filter(f => f.bpm !== null && f.camelot !== null && f.status === 'done' && f.keyStatus === 'done');
+
+  const eligible = files.filter(
+    f => f.bpm !== null && f.camelot !== null && f.status === 'done' && f.keyStatus === 'done'
+  );
 
   if (eligible.length === 0) {
-    return { tracks: [], transitions: [], totalScore: 0, avgScore: 0 };
+    return { tracks: [], transitions: [], totalScore: 0, avgScore: 0, mode: energyMode };
   }
 
-  if (eligible.length === 1) {
-    return { tracks: [eligible[0]], transitions: [], totalScore: 0, avgScore: 0 };
+  // ENERGY SORT ONLY MODES
+  if (energyMode === 'hot-cold') {
+    const ordered = sortHotToCold(eligible);
+    return { tracks: ordered, transitions: [], totalScore: 0, avgScore: 0, mode: energyMode };
   }
 
-  // Pick starting track
+  if (energyMode === 'cold-hot') {
+    const ordered = sortColdToHot(eligible);
+    return { tracks: ordered, transitions: [], totalScore: 0, avgScore: 0, mode: energyMode };
+  }
+
+  // --- Harmonic engine ---
   let startIdx = 0;
+
   if (startTrackId) {
     const idx = eligible.findIndex(f => f.id === startTrackId);
     if (idx >= 0) startIdx = idx;
   } else {
-    // Find track with most high-score neighbours as seed
     let bestConnectivity = -Infinity;
     eligible.forEach((f, i) => {
       let connectivity = 0;
@@ -189,21 +234,23 @@ export function generateHarmonicPlaylist(
   const totalScore = transitions.reduce((s, t) => s + t.score, 0);
   const avgScore = transitions.length > 0 ? Math.round(totalScore / transitions.length) : 0;
 
-  return { tracks: ordered, transitions, totalScore, avgScore };
+  return { tracks: ordered, transitions, totalScore, avgScore, mode: energyMode };
 }
 
-/**
- * Get transition info between two specific tracks.
- */
+/* ---------------- SINGLE TRANSITION ---------------- */
+
 export function getTransitionInfo(
   from: AudioFileInfo,
   to: AudioFileInfo,
   mode: MixMode = 'flexible',
   bpmTolerance: number = 8,
 ): HarmonicTransition {
+
   const t = scoreTransition(from, to, mode, bpmTolerance);
+
   return {
-    from, to,
+    from,
+    to,
     score: t.score,
     bpmDelta: t.bpmDelta,
     camelotRelation: t.relation,
