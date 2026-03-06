@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Headphones, Play, Square, Download, Zap, ChevronDown, ChevronUp, Music, FolderSync, Circle } from 'lucide-react';
+import { ArrowLeft, Headphones, Play, Square, Download, Zap, ChevronDown, ChevronUp, Music, FolderSync, Circle, Route } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AudioFileInfo, formatDuration } from '@/lib/audio-types';
 import {
@@ -12,6 +12,7 @@ import {
 import { getKeyColor } from '@/lib/key-utils';
 import { exportHarmonicPdf } from '@/lib/pdf-export-harmonic';
 import { CamelotWheel } from '@/components/CamelotWheel';
+import { ModulationPathView } from '@/components/ModulationPathView';
 import { isNativePlatform, renameFilesNatively } from '@/lib/native-file-service';
 import { toast } from 'sonner';
 
@@ -51,6 +52,7 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
   const [showSettings, setShowSettings] = useState(false);
   const [showWheel, setShowWheel] = useState(true);
   const [isReordering, setIsReordering] = useState(false);
+  const [showModulation, setShowModulation] = useState(false);
   const isNative = isNativePlatform();
 
   const playlist: HarmonicPlaylist = useMemo(
@@ -93,6 +95,18 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
       setIsReordering(false);
     }
   }, [isNative, playlist.tracks]);
+
+  if (showModulation) {
+    return (
+      <ModulationPathView
+        files={files}
+        onBack={() => setShowModulation(false)}
+        onPlay={onPlay}
+        onStop={onStop}
+        playingId={playingId}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -241,6 +255,15 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
           >
             <FolderSync className={`h-4 w-4 mr-2 ${isReordering ? 'animate-spin' : ''}`} />
             {isReordering ? 'Réorganisation…' : 'Réorganiser fichiers selon le mix'}
+          </Button>
+          <Button
+            onClick={() => setShowModulation(true)}
+            variant="outline"
+            className="h-12 text-sm col-span-2 border-accent/30 text-accent hover:bg-accent/10"
+            disabled={eligibleCount < 2}
+          >
+            <Route className="h-4 w-4 mr-2" />
+            🎛️ Modulation Engine
           </Button>
         </div>
 
