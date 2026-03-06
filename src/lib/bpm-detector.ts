@@ -28,8 +28,32 @@ export async function detectBpmFromArrayBuffer(arrayBuffer: ArrayBuffer): Promis
 }
 
 function analyzeTempo(data: Float32Array, sampleRate: number): number {
+  // Multi-pass detection with different filter settings for reliability
+  const results: number[] = [];
+
+  // Pass 1: Standard low-pass at 200Hz
+  results.push(singlePassTempo(data, sampleRate, 200));
+
+  // Pass 2: Lower cutoff at 150Hz (more bass-focused)
+  results.push(singlePassTempo(data, sampleRate, 150));
+
+  // Pass 3: Higher cutoff at 300Hz (captures snares)
+  results.push(singlePassTempo(data, sampleRate, 300));
+
+  // Average results that are within reasonable agreement
+  const median = results.sort((a, b) => a - b)[Math.floor(results.length / 2)];
+  const agreeing = results.filter(r => Math.abs(r - median) <= 10 || Math.abs(r * 2 - median) <= 10 || Math.abs(r - median * 2) <= 10);
+
+  const bpm = agreeing.length > 0
+    ? agreeing.reduce((s, v) => s + v, 0) / agreeing.length
+    : median;
+
+  return Math.round(bpm * 10) / 10;
+}
+
+function singlePassTempo(data: Float32Array, sampleRate: number, cutoff: number): number {
   // Low-pass filter the signal to focus on beats
-  const filtered = lowPassFilter(data, sampleRate, 200);
+  const filtered = lowPassFilter(data, sampleRate, cutoff);
   
   // Get energy envelope
   const hopSize = Math.floor(sampleRate * 0.01); // 10ms hops
@@ -67,11 +91,19 @@ function analyzeTempo(data: Float32Array, sampleRate: number): number {
   let bestVal = 0;
   
   for (let lag = minLag; lag <= maxLag; lag++) {
-    // Weight towards common tempos (100-140 BPM)
+    // Weight towards common DJ tempos (100-140 BPM range)
     const bpmAtLag = (60 * envelopeSampleRate) / lag;
     let weight = 1;
-    if (bpmAtLag >= 100 && bpmAtLag <= 140) weight = 1.2;
-    if (bpmAtLag >= 115 && bpmAtLag <= 135) weight = 1.4;
+    if (bpmAtLag >= 90 && bpmAtLag <= 150) weight = 1.15;
+    if (bpmAtLag >= 100 && bpmAtLag <= 140) weight = 1.3;
+    if (bpmAtLag >= 115 && bpmAtLag <= 135) weight = 1.5;
+    
+    // Also check for sub-harmonics (half tempo confirmation)
+    const halfLag = lag * 2;
+    if (halfLag <= maxLag && correlations[halfLag] > 0) {
+      // If half-tempo also has a peak, boost confidence
+      weight *= 1.1;
+    }
     
     const weighted = correlations[lag] * weight;
     if (weighted > bestVal) {

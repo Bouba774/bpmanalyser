@@ -10,9 +10,10 @@ interface AudioFileRowProps {
   onPlay: (id: string, file: File) => void;
   onStop: () => void;
   showKey?: boolean;
+  djBpmMode?: boolean;
 }
 
-export function AudioFileRow({ file, index, playingId, onPlay, onStop, showKey }: AudioFileRowProps) {
+export function AudioFileRow({ file, index, playingId, onPlay, onStop, showKey, djBpmMode }: AudioFileRowProps) {
   const isPlaying = playingId === file.id;
 
   const handleTogglePlay = () => {
@@ -62,9 +63,18 @@ export function AudioFileRow({ file, index, playingId, onPlay, onStop, showKey }
           {file.status === 'done' && file.bpm !== null && (
             <span
               className="font-mono font-bold text-base"
-              style={{ color: getBpmColor(file.bpm) }}
+              style={{ color: getBpmColor(djBpmMode ? (file.djBpm ?? file.bpm) : file.bpm) }}
             >
-              {file.bpm} <span className="text-xs font-normal opacity-70">BPM</span>
+              {djBpmMode && file.djBpm !== null && file.djBpm !== file.bpm ? (
+                <>
+                  {file.djBpm} <span className="text-xs font-normal opacity-50">({file.bpm})</span>
+                  <span className="text-xs font-normal opacity-70"> BPM</span>
+                </>
+              ) : (
+                <>
+                  {file.bpm} <span className="text-xs font-normal opacity-70">BPM</span>
+                </>
+              )}
             </span>
           )}
           {file.status === 'pending' && (

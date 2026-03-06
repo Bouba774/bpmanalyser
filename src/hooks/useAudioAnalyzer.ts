@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { AudioFileInfo, isAudioFile, getFileExtension } from '@/lib/audio-types';
+import { AudioFileInfo, isAudioFile, getFileExtension, normalizeDjBpm } from '@/lib/audio-types';
 import { detectBpm, detectBpmFromArrayBuffer } from '@/lib/bpm-detector';
 import { detectKey, detectKeyFromArrayBuffer } from '@/lib/key-detector';
 import { isNativePlatform } from '@/lib/native-file-service';
@@ -28,6 +28,7 @@ export function useAudioAnalyzer() {
     size,
     duration: 0,
     bpm: null,
+    djBpm: null,
     key: null,
     camelot: null,
     keyConfidence: null,
@@ -64,7 +65,7 @@ export function useAudioAnalyzer() {
       try {
         const result = await detectBpm(audioFiles[i].file);
         setFiles(prev => prev.map(f =>
-          f.id === audioFiles[i].id ? { ...f, bpm: result.bpm, duration: result.duration, status: 'done', keyStatus: 'analyzing' } : f
+          f.id === audioFiles[i].id ? { ...f, bpm: result.bpm, djBpm: normalizeDjBpm(result.bpm), duration: result.duration, status: 'done', keyStatus: 'analyzing' } : f
         ));
         // Auto key detection right after BPM
         try {
@@ -127,7 +128,7 @@ export function useAudioAnalyzer() {
 
           const bpmResult = await detectBpmFromArrayBuffer(arrayBuffer);
           setFiles(prev => prev.map(f =>
-            f.id === audioFiles[i].id ? { ...f, bpm: bpmResult.bpm, duration: bpmResult.duration, status: 'done', keyStatus: 'analyzing' } : f
+            f.id === audioFiles[i].id ? { ...f, bpm: bpmResult.bpm, djBpm: normalizeDjBpm(bpmResult.bpm), duration: bpmResult.duration, status: 'done', keyStatus: 'analyzing' } : f
           ));
           // Auto key detection right after BPM
           try {
