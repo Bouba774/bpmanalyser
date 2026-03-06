@@ -4,7 +4,7 @@
  * + Thermal Energy Sorting (Hot/Cold)
  */
 
-import { AudioFileInfo } from './audio-types';
+import { AudioFileInfo, djBpmDelta } from './audio-types';
 
 export type MixMode = 'strict' | 'flexible' | 'creative';
 export type EnergyMode = 'harmonic' | 'hot-cold' | 'cold-hot';
@@ -103,10 +103,17 @@ function scoreTransition(
   to: AudioFileInfo,
   mode: MixMode,
   bpmTolerance: number,
+  useDjBpm: boolean = false,
 ): { score: number; bpmDelta: number; relation: string; quality: TransitionQuality } {
 
   let score = 0;
-  const bpmDelta = Math.abs((from.bpm ?? 0) - (to.bpm ?? 0));
+
+  // Use DJ BPM delta (considers half/double tempo) when DJ mode is on
+  const bpmA = useDjBpm ? (from.djBpm ?? from.bpm ?? 0) : (from.bpm ?? 0);
+  const bpmB = useDjBpm ? (to.djBpm ?? to.bpm ?? 0) : (to.bpm ?? 0);
+  const bpmDelta = useDjBpm
+    ? djBpmDelta(from.bpm ?? 0, to.bpm ?? 0)
+    : Math.abs(bpmA - bpmB);
 
   const ca = from.camelot ? parseCamelot(from.camelot) : null;
   const cb = to.camelot ? parseCamelot(to.camelot) : null;
@@ -149,6 +156,7 @@ export function generateHarmonicPlaylist(
   bpmTolerance: number = 8,
   energyMode: EnergyMode = 'harmonic',
   startTrackId?: string,
+  useDjBpm: boolean = false,
 ): HarmonicPlaylist {
 
   const eligible = files.filter(
@@ -182,7 +190,7 @@ export function generateHarmonicPlaylist(
       let connectivity = 0;
       eligible.forEach((g, j) => {
         if (i === j) return;
-        const { score } = scoreTransition(f, g, mode, bpmTolerance);
+        const { score } = scoreTransition(f, g, mode, bpmTolerance, useDjBpm);
         if (score >= 80) connectivity += score;
       });
       if (connectivity > bestConnectivity) {
@@ -207,7 +215,7 @@ export function generateHarmonicPlaylist(
 
     for (const candidate of eligible) {
       if (used.has(candidate.id)) continue;
-      const t = scoreTransition(current, candidate, mode, bpmTolerance);
+      const t = scoreTransition(current, candidate, mode, bpmTolerance, useDjBpm);
       if (t.score > bestScore) {
         bestScore = t.score;
         bestTrack = candidate;
@@ -244,9 +252,10 @@ export function getTransitionInfo(
   to: AudioFileInfo,
   mode: MixMode = 'flexible',
   bpmTolerance: number = 8,
+  useDjBpm: boolean = false,
 ): HarmonicTransition {
 
-  const t = scoreTransition(from, to, mode, bpmTolerance);
+  const t = scoreTransition(from, to, mode, bpmTolerance, useDjBpm);
 
   return {
     from,

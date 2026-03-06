@@ -6,6 +6,7 @@ export interface AudioFileInfo {
   size: number;
   duration: number;
   bpm: number | null;
+  djBpm: number | null;       // normalized BPM for DJ use
   key: string | null;         // e.g. "F# minor"
   camelot: string | null;     // e.g. "11A"
   keyConfidence: number | null;
@@ -15,6 +16,30 @@ export interface AudioFileInfo {
   keyError?: string;
   file: File;
   safUri?: string;
+}
+
+/**
+ * Normalize BPM to DJ range (90-150).
+ * Matches behavior of DiscDj, VirtualDJ, Serato, Rekordbox.
+ */
+export function normalizeDjBpm(bpm: number): number {
+  let normalized = bpm;
+  while (normalized < 90 && normalized * 2 <= 200) normalized *= 2;
+  while (normalized > 150 && normalized / 2 >= 60) normalized /= 2;
+  return Math.round(normalized * 10) / 10;
+}
+
+/**
+ * Check if two BPMs are DJ-compatible (including half/double tempo).
+ * Returns the effective delta after considering half/double.
+ */
+export function djBpmDelta(bpmA: number, bpmB: number): number {
+  const direct = Math.abs(bpmA - bpmB);
+  const halfA = Math.abs(bpmA * 2 - bpmB);
+  const halfB = Math.abs(bpmA - bpmB * 2);
+  const doubleA = Math.abs(bpmA / 2 - bpmB);
+  const doubleB = Math.abs(bpmA - bpmB / 2);
+  return Math.min(direct, halfA, halfB, doubleA, doubleB);
 }
 
 export type SortKey = 'name' | 'bpm' | 'duration' | 'format' | 'key' | 'camelot';

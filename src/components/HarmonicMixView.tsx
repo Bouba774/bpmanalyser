@@ -22,6 +22,7 @@ interface HarmonicMixViewProps {
   onPlay: (id: string, file: File) => void;
   onStop: () => void;
   playingId: string | null;
+  djBpmMode?: boolean;
 }
 
 const MODE_LABELS: Record<MixMode, { label: string; desc: string }> = {
@@ -46,7 +47,7 @@ function qualityLabel(q: TransitionQuality) {
   }
 }
 
-export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: HarmonicMixViewProps) {
+export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId, djBpmMode = false }: HarmonicMixViewProps) {
   const [mode, setMode] = useState<MixMode>('flexible');
   const [bpmTolerance, setBpmTolerance] = useState(8);
   const [showSettings, setShowSettings] = useState(false);
@@ -56,8 +57,8 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
   const isNative = isNativePlatform();
 
   const playlist: HarmonicPlaylist = useMemo(
-    () => generateHarmonicPlaylist(files, mode, bpmTolerance),
-    [files, mode, bpmTolerance]
+    () => generateHarmonicPlaylist(files, mode, bpmTolerance, 'harmonic', undefined, djBpmMode),
+    [files, mode, bpmTolerance, djBpmMode]
   );
 
   const eligibleCount = files.filter(f => f.bpm !== null && f.camelot !== null && f.status === 'done' && f.keyStatus === 'done').length;

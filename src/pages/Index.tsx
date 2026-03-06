@@ -1,6 +1,8 @@
 import { useMemo, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Download, Trash2, StopCircle, Activity, FolderSync, RefreshCw, Music, Headphones } from 'lucide-react';
+import { FolderOpen, Download, Trash2, StopCircle, Activity, FolderSync, RefreshCw, Music, Headphones, Disc3 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { AnalysisProgress } from '@/components/AnalysisProgress';
@@ -39,6 +41,7 @@ const Index = () => {
   const [renameOpen, setRenameOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [showHarmonicMix, setShowHarmonicMix] = useState(false);
+  const [djBpmMode, setDjBpmMode] = useState(true);
 
   const hasKeys = files.some(f => f.keyStatus === 'done');
   const bpmDoneCount = files.filter(f => f.status === 'done').length;
@@ -120,8 +123,9 @@ const Index = () => {
 
     result.sort((a, b) => {
       const dir = sort.direction === 'asc' ? 1 : -1;
+      const getBpm = (f: AudioFileInfo) => djBpmMode ? (f.djBpm ?? f.bpm ?? 999) : (f.bpm ?? 999);
       switch (sort.key) {
-        case 'bpm': return ((a.bpm ?? 999) - (b.bpm ?? 999)) * dir;
+        case 'bpm': return (getBpm(a) - getBpm(b)) * dir;
         case 'name': return a.name.localeCompare(b.name) * dir;
         case 'duration': return (a.duration - b.duration) * dir;
         case 'format': return a.format.localeCompare(b.format) * dir;
@@ -132,7 +136,7 @@ const Index = () => {
     });
 
     return result;
-  }, [files, filter, sort]);
+  }, [files, filter, sort, djBpmMode]);
 
   const groupedFiles = useMemo(() => {
     const groups: { label: string; color: string; files: AudioFileInfo[] }[] = BPM_GROUPS.map(g => ({
@@ -165,6 +169,7 @@ const Index = () => {
           onPlay={handlePlay}
           onStop={handleStopPlayer}
           playingId={playingId}
+          djBpmMode={djBpmMode}
         />
         <MiniPlayer file={playingFile} fileName={playingName} isPlaying={isPlaying} onStop={handleStopPlayer} onToggle={handleTogglePlayer} />
       </>
@@ -344,6 +349,18 @@ const Index = () => {
           />
         )}
 
+        {/* DJ BPM Toggle */}
+        {hasFiles && bpmDoneCount > 0 && (
+          <div className="flex items-center gap-3 px-1">
+            <Switch id="dj-bpm-mode" checked={djBpmMode} onCheckedChange={setDjBpmMode} />
+            <Label htmlFor="dj-bpm-mode" className="flex items-center gap-1.5 text-sm cursor-pointer">
+              <Disc3 className="h-4 w-4 text-primary" />
+              DJ BPM Mode
+            </Label>
+            <span className="text-xs text-muted-foreground">(90–150 normalisé)</span>
+          </div>
+        )}
+
         {/* Stats */}
         {hasFiles && bpmDoneCount > 0 && (
           <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
@@ -366,7 +383,7 @@ const Index = () => {
         {hasFiles && viewMode === 'list' && (
           <div className="space-y-2">
             {filteredAndSorted.map((file, i) => (
-              <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} showKey={hasKeys} />
+              <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} showKey={hasKeys} djBpmMode={djBpmMode} />
             ))}
           </div>
         )}
@@ -383,7 +400,7 @@ const Index = () => {
                 </div>
                 <div className="space-y-2">
                   {group.files.map((file, i) => (
-                    <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} showKey={hasKeys} />
+                    <AudioFileRow key={file.id} file={file} index={i} playingId={playingId} onPlay={handlePlay} onStop={handleStopPlayer} showKey={hasKeys} djBpmMode={djBpmMode} />
                   ))}
                 </div>
               </div>
