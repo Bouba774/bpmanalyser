@@ -65,6 +65,7 @@ export function AudioFileRow({ file, index, playingId, onPlay, onStop, showKey, 
               className="font-mono font-bold text-base"
               style={{ color: getBpmColor(djBpmMode ? (file.djBpm ?? file.bpm) : file.bpm) }}
             >
+              {file.bpmSource === 'tag' ? '📖 ' : '🎵 '}
               {djBpmMode && file.djBpm !== null && file.djBpm !== file.bpm ? (
                 <>
                   {file.djBpm} <span className="text-xs font-normal opacity-50">({file.bpm})</span>
@@ -75,6 +76,9 @@ export function AudioFileRow({ file, index, playingId, onPlay, onStop, showKey, 
                   {file.bpm} <span className="text-xs font-normal opacity-70">BPM</span>
                 </>
               )}
+              <span className="text-[10px] font-normal opacity-50 ml-1">
+                {file.bpmSource === 'tag' ? '(tag ID3)' : '(analysé)'}
+              </span>
             </span>
           )}
           {file.status === 'pending' && (
