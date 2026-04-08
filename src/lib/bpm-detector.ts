@@ -169,119 +169,163 @@ async function detectBpmWithEssentia(audioBuffer: AudioBuffer): Promise<number |
 }
 
 /**
- * Fallback: multi-pass autocorrelation BPM detection
+ * Fallback: Fixed Tempo Estimator (Vamp SDK compatible)
+ * Reimplementation of the algorithm used by DiscDJ via Vamp SDK.
+ *
+ * Steps:
+ *  1. Mono PCM → STFT (window 2048, hop 512)
+ *  2. Spectral flux onset detection (half-wave rectified)
+ *  3. Autocorrelation of onset function
+ *  4. Peak search in 60-180 BPM range with 120 BPM preference weighting
+ *  5. Return integer BPM
  */
 function analyzeTempoFallback(audioBuffer: AudioBuffer): number {
   const channelData = audioBuffer.getChannelData(0);
   const sampleRate = audioBuffer.sampleRate;
-  return analyzeTempo(channelData, sampleRate);
+  return fixedTempoEstimator(channelData, sampleRate);
 }
 
-// ============= Original multi-pass fallback algorithm =============
+function fixedTempoEstimator(data: Float32Array, sampleRate: number): number {
+  const windowSize = 2048;
+  const hopSize = 512;
+  const numBins = windowSize / 2 + 1; // 1025
 
-function analyzeTempo(data: Float32Array, sampleRate: number): number {
-  const results: number[] = [];
-  results.push(singlePassTempo(data, sampleRate, 200));
-  results.push(singlePassTempo(data, sampleRate, 150));
-  results.push(singlePassTempo(data, sampleRate, 300));
+  // --- Step 1 & 2: STFT + Spectral Flux ---
+  const numFrames = Math.floor((data.length - windowSize) / hopSize);
+  if (numFrames < 2) return 120;
 
-  const median = results.sort((a, b) => a - b)[Math.floor(results.length / 2)];
-  const agreeing = results.filter(r => Math.abs(r - median) <= 10 || Math.abs(r * 2 - median) <= 10 || Math.abs(r - median * 2) <= 10);
-
-  const bpm = agreeing.length > 0
-    ? agreeing.reduce((s, v) => s + v, 0) / agreeing.length
-    : median;
-
-  return Math.round(bpm * 10) / 10;
-}
-
-function singlePassTempo(data: Float32Array, sampleRate: number, cutoff: number): number {
-  const filtered = lowPassFilter(data, sampleRate, cutoff);
-  const hopSize = Math.floor(sampleRate * 0.01);
-  const windowSize = Math.floor(sampleRate * 0.02);
-  const envelope = getEnergyEnvelope(filtered, windowSize, hopSize);
-
-  const onsetSignal = new Float32Array(envelope.length);
-  for (let i = 1; i < envelope.length; i++) {
-    onsetSignal[i] = Math.max(0, envelope[i] - envelope[i - 1]);
+  // Hann window
+  const hannWindow = new Float32Array(windowSize);
+  for (let i = 0; i < windowSize; i++) {
+    hannWindow[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (windowSize - 1)));
   }
 
-  const envelopeSampleRate = sampleRate / hopSize;
-  const minBpm = 60;
-  const maxBpm = 200;
-  const minLag = Math.floor((60 / maxBpm) * envelopeSampleRate);
-  const maxLag = Math.floor((60 / minBpm) * envelopeSampleRate);
+  // Compute magnitude spectra frame by frame, build spectral flux
+  let prevMagnitudes = new Float32Array(numBins);
+  const onsetFunction = new Float32Array(numFrames);
 
-  const correlations = new Float32Array(maxLag + 1);
-  const len = Math.min(onsetSignal.length, Math.floor(envelopeSampleRate * 30));
+  // Reusable buffers
+  const real = new Float32Array(windowSize);
+  const imag = new Float32Array(windowSize);
+
+  for (let frame = 0; frame < numFrames; frame++) {
+    const offset = frame * hopSize;
+
+    // Apply window
+    for (let i = 0; i < windowSize; i++) {
+      real[i] = data[offset + i] * hannWindow[i];
+      imag[i] = 0;
+    }
+
+    // In-place FFT
+    fftInPlace(real, imag, windowSize);
+
+    // Compute magnitudes and spectral flux (half-wave rectified)
+    let flux = 0;
+    for (let bin = 0; bin < numBins; bin++) {
+      const mag = Math.sqrt(real[bin] * real[bin] + imag[bin] * imag[bin]);
+      const diff = mag - prevMagnitudes[bin];
+      if (diff > 0) flux += diff; // half-wave rectification
+      prevMagnitudes[bin] = mag;
+    }
+    onsetFunction[frame] = flux;
+  }
+
+  // --- Step 3: Autocorrelation of onset function ---
+  const onsetRate = sampleRate / hopSize; // frames per second
+  const minBpm = 60;
+  const maxBpm = 180;
+  const minLag = Math.floor((60 / maxBpm) * onsetRate);
+  const maxLag = Math.min(
+    Math.floor((60 / minBpm) * onsetRate),
+    numFrames - 1
+  );
+
+  if (minLag >= maxLag) return 120;
+
+  // Normalize onset function (zero-mean)
+  let mean = 0;
+  for (let i = 0; i < numFrames; i++) mean += onsetFunction[i];
+  mean /= numFrames;
+  for (let i = 0; i < numFrames; i++) onsetFunction[i] -= mean;
+
+  const acf = new Float32Array(maxLag + 1);
+  const corrLen = numFrames;
 
   for (let lag = minLag; lag <= maxLag; lag++) {
     let sum = 0;
-    let count = 0;
-    for (let i = 0; i < len - lag; i++) {
-      sum += onsetSignal[i] * onsetSignal[i + lag];
-      count++;
+    for (let i = 0; i < corrLen - lag; i++) {
+      sum += onsetFunction[i] * onsetFunction[i + lag];
     }
-    correlations[lag] = count > 0 ? sum / count : 0;
+    acf[lag] = sum / (corrLen - lag);
   }
 
+  // --- Step 4 & 5: Peak search with tempo preference weighting ---
+  // Gaussian weighting centered at 120 BPM (sigma ~40 BPM)
   let bestLag = minLag;
-  let bestVal = 0;
+  let bestVal = -Infinity;
 
   for (let lag = minLag; lag <= maxLag; lag++) {
-    const bpmAtLag = (60 * envelopeSampleRate) / lag;
-    let weight = 1;
-    if (bpmAtLag >= 90 && bpmAtLag <= 150) weight = 1.15;
-    if (bpmAtLag >= 100 && bpmAtLag <= 140) weight = 1.3;
-    if (bpmAtLag >= 115 && bpmAtLag <= 135) weight = 1.5;
+    const bpmAtLag = (60 * onsetRate) / lag;
+    // Gaussian preference: peak at 120 BPM, sigma=40
+    const diff = bpmAtLag - 120;
+    const weight = Math.exp(-(diff * diff) / (2 * 40 * 40));
 
+    // Also boost integer multiples/sub-multiples for consistency
     const halfLag = lag * 2;
-    if (halfLag <= maxLag && correlations[halfLag] > 0) {
-      weight *= 1.1;
+    let harmonicBoost = 1.0;
+    if (halfLag <= maxLag && acf[halfLag] > 0) {
+      harmonicBoost = 1.05;
     }
 
-    const weighted = correlations[lag] * weight;
+    const weighted = acf[lag] * weight * harmonicBoost;
     if (weighted > bestVal) {
       bestVal = weighted;
       bestLag = lag;
     }
   }
 
-  const rawBpm = (60 * envelopeSampleRate) / bestLag;
-  let bpm = rawBpm;
-  if (bpm < 80 && bpm * 2 <= 200) bpm *= 2;
-  if (bpm > 160 && bpm / 2 >= 60) bpm /= 2;
-
-  return Math.round(bpm * 10) / 10;
+  const rawBpm = (60 * onsetRate) / bestLag;
+  // Return integer BPM as DiscDJ does
+  return Math.round(rawBpm);
 }
 
-function lowPassFilter(data: Float32Array, sampleRate: number, cutoff: number): Float32Array {
-  const rc = 1.0 / (cutoff * 2 * Math.PI);
-  const dt = 1.0 / sampleRate;
-  const alpha = dt / (rc + dt);
+// ============= Radix-2 Cooley-Tukey FFT (in-place) =============
 
-  const filtered = new Float32Array(data.length);
-  filtered[0] = data[0];
-
-  for (let i = 1; i < data.length; i++) {
-    filtered[i] = filtered[i - 1] + alpha * (data[i] - filtered[i - 1]);
-  }
-
-  return filtered;
-}
-
-function getEnergyEnvelope(data: Float32Array, windowSize: number, hopSize: number): Float32Array {
-  const numFrames = Math.floor((data.length - windowSize) / hopSize);
-  const envelope = new Float32Array(numFrames);
-
-  for (let i = 0; i < numFrames; i++) {
-    const start = i * hopSize;
-    let sum = 0;
-    for (let j = start; j < start + windowSize && j < data.length; j++) {
-      sum += data[j] * data[j];
+function fftInPlace(real: Float32Array, imag: Float32Array, n: number): void {
+  // Bit-reversal permutation
+  let j = 0;
+  for (let i = 0; i < n; i++) {
+    if (i < j) {
+      let tmp = real[i]; real[i] = real[j]; real[j] = tmp;
+      tmp = imag[i]; imag[i] = imag[j]; imag[j] = tmp;
     }
-    envelope[i] = Math.sqrt(sum / windowSize);
+    let m = n >> 1;
+    while (m >= 1 && j >= m) {
+      j -= m;
+      m >>= 1;
+    }
+    j += m;
   }
 
-  return envelope;
+  // Butterfly stages
+  for (let size = 2; size <= n; size *= 2) {
+    const halfSize = size / 2;
+    const angleStep = -2 * Math.PI / size;
+    for (let i = 0; i < n; i += size) {
+      for (let k = 0; k < halfSize; k++) {
+        const angle = angleStep * k;
+        const twiddleRe = Math.cos(angle);
+        const twiddleIm = Math.sin(angle);
+        const evenIdx = i + k;
+        const oddIdx = i + k + halfSize;
+        const tRe = twiddleRe * real[oddIdx] - twiddleIm * imag[oddIdx];
+        const tIm = twiddleRe * imag[oddIdx] + twiddleIm * real[oddIdx];
+        real[oddIdx] = real[evenIdx] - tRe;
+        imag[oddIdx] = imag[evenIdx] - tIm;
+        real[evenIdx] += tRe;
+        imag[evenIdx] += tIm;
+      }
+    }
+  }
 }
