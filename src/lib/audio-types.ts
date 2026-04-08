@@ -7,6 +7,7 @@ export interface AudioFileInfo {
   duration: number;
   bpm: number | null;
   djBpm: number | null;       // normalized BPM for DJ use
+  bpmSource: 'tag' | 'analyzed' | null; // where BPM came from
   key: string | null;         // e.g. "F# minor"
   camelot: string | null;     // e.g. "11A"
   keyConfidence: number | null;
