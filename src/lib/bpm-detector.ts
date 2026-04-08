@@ -65,8 +65,8 @@ async function readBpmFromTag(blob: Blob): Promise<number | null> {
  */
 export async function writeBpmTag(arrayBuffer: ArrayBuffer, bpm: number): Promise<ArrayBuffer> {
   try {
-    const { default: ID3Writer } = await import('browser-id3-writer');
-    const writer = new ID3Writer(arrayBuffer);
+    const { ID3Writer } = await import('browser-id3-writer');
+    const writer = new (ID3Writer as any)(arrayBuffer);
     writer.setFrame('TBPM', String(Math.round(bpm)));
     writer.addTag();
     return writer.arrayBuffer as ArrayBuffer;
