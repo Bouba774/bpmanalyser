@@ -1,63 +1,14 @@
 /**
  * BPM Detection Engine
- * 1. Reads BPM from ID3 TBPM tag (priority)
- * 2. Falls back to essentia.js RhythmExtractor2013
- * 3. Falls back to multi-pass autocorrelation
- * 4. Writes detected BPM back to ID3 tag
+ * Uses Vamp SDK "Fixed Tempo Estimator" algorithm reimplemented in TS.
+ * Always re-analyzes audio (ignores existing ID3 TBPM tag) and writes
+ * the result back to the tag for DiscDJ compatibility.
  */
-
-import * as mm from 'music-metadata-browser';
 
 export interface BpmResult {
   bpm: number;
   duration: number;
   source: 'tag' | 'analyzed';
-}
-
-/**
- * Try to load essentia.js dynamically. Returns null if unavailable.
- */
-let essentiaInstance: any = null;
-let essentiaLoading: Promise<any> | null = null;
-
-async function getEssentia(): Promise<any> {
-  if (essentiaInstance) return essentiaInstance;
-  if (essentiaLoading) return essentiaLoading;
-
-  essentiaLoading = (async () => {
-    try {
-      const [{ default: Essentia }, { EssentiaWASM }] = await Promise.all([
-        import('essentia.js/dist/essentia.js-core.es.js'),
-        import('essentia.js/dist/essentia-wasm.web.js'),
-      ]);
-      essentiaInstance = new Essentia(EssentiaWASM);
-      return essentiaInstance;
-    } catch (e) {
-      console.warn('Essentia.js unavailable, using fallback BPM detection:', e);
-      return null;
-    }
-  })();
-
-  return essentiaLoading;
-}
-
-// Pre-load essentia on module import
-getEssentia();
-
-/**
- * Read BPM from ID3 TBPM tag
- */
-async function readBpmFromTag(blob: Blob): Promise<number | null> {
-  try {
-    const metadata = await mm.parseBlob(blob);
-    const bpm = metadata.common.bpm;
-    if (bpm && bpm > 0) {
-      return Math.round(bpm * 10) / 10;
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -80,9 +31,6 @@ export async function writeBpmTag(arrayBuffer: ArrayBuffer, bpm: number): Promis
  * Detect BPM from a File object (web path)
  */
 export async function detectBpm(file: File): Promise<BpmResult> {
-  // Step 1: Try ID3 tag
-  const tagBpm = await readBpmFromTag(file);
-
   const arrayBuffer = await file.arrayBuffer();
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
 
@@ -90,14 +38,10 @@ export async function detectBpm(file: File): Promise<BpmResult> {
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
     const duration = audioBuffer.duration;
 
-    if (tagBpm) {
-      return { bpm: tagBpm, duration, source: 'tag' };
-    }
+    // Always run Fixed Tempo Estimator (ignore any existing ID3 tag)
+    const bpm = analyzeTempoFallback(audioBuffer);
 
-    // Step 2: Try essentia.js
-    const bpm = await detectBpmWithEssentia(audioBuffer) ?? analyzeTempoFallback(audioBuffer);
-
-    // Step 3: Write BPM back to tag (best-effort, non-blocking)
+    // Write BPM back to tag (best-effort, non-blocking)
     writeBpmTag(arrayBuffer.slice(0), bpm).catch(() => {});
 
     return { bpm, duration, source: 'analyzed' };
@@ -110,24 +54,16 @@ export async function detectBpm(file: File): Promise<BpmResult> {
  * Detect BPM from an ArrayBuffer (native/SAF path)
  */
 export async function detectBpmFromArrayBuffer(arrayBuffer: ArrayBuffer): Promise<BpmResult> {
-  // Step 1: Try ID3 tag
-  const blob = new Blob([arrayBuffer]);
-  const tagBpm = await readBpmFromTag(blob);
-
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
 
   try {
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
     const duration = audioBuffer.duration;
 
-    if (tagBpm) {
-      return { bpm: tagBpm, duration, source: 'tag' };
-    }
+    // Always run Fixed Tempo Estimator (ignore any existing ID3 tag)
+    const bpm = analyzeTempoFallback(audioBuffer);
 
-    // Step 2: Try essentia.js
-    const bpm = await detectBpmWithEssentia(audioBuffer) ?? analyzeTempoFallback(audioBuffer);
-
-    // Step 3: Write BPM back to tag
+    // Write BPM back to tag (best-effort, non-blocking)
     writeBpmTag(arrayBuffer.slice(0), bpm).catch(() => {});
 
     return { bpm, duration, source: 'analyzed' };
@@ -137,40 +73,7 @@ export async function detectBpmFromArrayBuffer(arrayBuffer: ArrayBuffer): Promis
 }
 
 /**
- * Use essentia.js RhythmExtractor2013 for BPM detection
- */
-async function detectBpmWithEssentia(audioBuffer: AudioBuffer): Promise<number | null> {
-  try {
-    const essentia = await getEssentia();
-    if (!essentia) return null;
-
-    // Get mono channel data
-    const channelData = audioBuffer.getChannelData(0);
-
-    // Create essentia vector from channel data
-    const signal = essentia.arrayToVector(channelData);
-
-    // Use RhythmExtractor2013
-    const result = essentia.RhythmExtractor2013(signal);
-    const bpm = result.bpm;
-
-    if (bpm && bpm > 0) {
-      // Normalize to DJ range
-      let normalized = bpm;
-      if (normalized < 60) normalized *= 2;
-      if (normalized > 200) normalized /= 2;
-      return Math.round(normalized * 10) / 10;
-    }
-    return null;
-  } catch (e) {
-    console.warn('Essentia BPM detection failed:', e);
-    return null;
-  }
-}
-
-/**
- * Fallback: Fixed Tempo Estimator (Vamp SDK compatible)
- * Reimplementation of the algorithm used by DiscDJ via Vamp SDK.
+ * Fixed Tempo Estimator (Vamp SDK compatible)
  *
  * Steps:
  *  1. Mono PCM → STFT (window 2048, hop 512)
