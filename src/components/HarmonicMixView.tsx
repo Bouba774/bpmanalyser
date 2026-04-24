@@ -22,13 +22,12 @@ interface HarmonicMixViewProps {
   onPlay: (id: string, file: File) => void;
   onStop: () => void;
   playingId: string | null;
-  djBpmMode?: boolean;
 }
 
 const MODE_LABELS: Record<MixMode, { label: string; desc: string }> = {
-  strict: { label: 'Strict', desc: 'BPM ≤3, clé parfaite' },
-  flexible: { label: 'Flexible', desc: 'BPM ≤5, clé proche' },
-  creative: { label: 'Créatif', desc: 'BPM large, mix audacieux' },
+  strict: { label: 'Strict', desc: 'Énergie ≤1, clé parfaite' },
+  flexible: { label: 'Flexible', desc: 'Énergie ≤2, clé proche' },
+  creative: { label: 'Créatif', desc: 'Énergie large, mix audacieux' },
 };
 
 function qualityIcon(q: TransitionQuality) {
@@ -47,9 +46,9 @@ function qualityLabel(q: TransitionQuality) {
   }
 }
 
-export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId, djBpmMode = false }: HarmonicMixViewProps) {
+export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: HarmonicMixViewProps) {
   const [mode, setMode] = useState<MixMode>('flexible');
-  const [bpmTolerance, setBpmTolerance] = useState(8);
+  const [energyTolerance, setEnergyTolerance] = useState(2.5);
   const [showSettings, setShowSettings] = useState(false);
   const [showWheel, setShowWheel] = useState(true);
   const [isReordering, setIsReordering] = useState(false);
@@ -57,11 +56,11 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId, djBp
   const isNative = isNativePlatform();
 
   const playlist: HarmonicPlaylist = useMemo(
-    () => generateHarmonicPlaylist(files, mode, bpmTolerance, 'harmonic', undefined, djBpmMode),
-    [files, mode, bpmTolerance, djBpmMode]
+    () => generateHarmonicPlaylist(files, mode, energyTolerance, 'harmonic'),
+    [files, mode, energyTolerance],
   );
 
-  const eligibleCount = files.filter(f => f.bpm !== null && f.camelot !== null && f.status === 'done' && f.keyStatus === 'done').length;
+  const eligibleCount = files.filter(f => f.energy !== null && f.camelot !== null && f.status === 'done' && f.keyStatus === 'done').length;
 
   const handleExportPdf = useCallback(() => {
     exportHarmonicPdf(playlist);
@@ -74,16 +73,16 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId, djBp
     }
     setIsReordering(true);
     try {
-      const filesToRename = playlist.tracks.map((track, i) => ({
+      const filesToRename = playlist.tracks.map((track) => ({
         name: track.name,
-        bpm: track.bpm!,
+        energy: track.energy!,
+        camelot: track.camelot!,
         uri: track.safUri || track.path,
       }));
       const options = {
-        format: 'numeric_bpm' as const,
+        format: 'numeric_energy' as const,
         sortOrder: 'asc' as const,
       };
-      // Rename using harmonic order index
       const res = await renameFilesNatively(filesToRename, options);
       if (res.errors.length === 0) {
         toast.success(`${res.success} fichier(s) réorganisé(s) selon le mix harmonique`);
