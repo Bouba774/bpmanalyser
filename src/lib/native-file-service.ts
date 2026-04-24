@@ -128,7 +128,7 @@ export async function renameFilesNatively(
 
   for (let i = 0; i < sorted.length; i++) {
     const file = sorted[i];
-    const newName = generateNewName(file.name, file.bpm, i, sorted.length, options);
+    const newName = generateNewName(file.name, file.energy, file.camelot, i, sorted.length, options);
 
     if (newName === file.name) {
       success++;
