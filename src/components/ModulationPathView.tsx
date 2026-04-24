@@ -24,11 +24,11 @@ export function ModulationPathView({ files, onBack, onPlay, onStop, playingId }:
   const [fromId, setFromId] = useState<string | null>(null);
   const [toId, setToId] = useState<string | null>(null);
   const [maxPivots, setMaxPivots] = useState(4);
-  const [bpmTolerance, setBpmTolerance] = useState(10);
+  const [energyTolerance, setEnergyTolerance] = useState(2);
   const [showSettings, setShowSettings] = useState(false);
 
   const eligible = useMemo(
-    () => files.filter(f => f.bpm !== null && f.camelot !== null && f.status === 'done' && f.keyStatus === 'done'),
+    () => files.filter(f => f.energy !== null && f.camelot !== null && f.status === 'done' && f.keyStatus === 'done'),
     [files]
   );
 
@@ -37,8 +37,8 @@ export function ModulationPathView({ files, onBack, onPlay, onStop, playingId }:
 
   const modulation: ModulationPath | null = useMemo(() => {
     if (!fromTrack || !toTrack || fromTrack.id === toTrack.id) return null;
-    return buildModulationPath(fromTrack, toTrack, eligible, maxPivots, bpmTolerance);
-  }, [fromTrack, toTrack, eligible, maxPivots, bpmTolerance]);
+    return buildModulationPath(fromTrack, toTrack, eligible, maxPivots, energyTolerance);
+  }, [fromTrack, toTrack, eligible, maxPivots, energyTolerance]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -117,11 +117,11 @@ export function ModulationPathView({ files, onBack, onPlay, onStop, playingId }:
                 </div>
                 <div>
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">Tolérance BPM</span>
-                    <span className="font-mono text-primary">±{bpmTolerance} BPM</span>
+                    <span className="text-muted-foreground">Tolérance Énergie</span>
+                    <span className="font-mono text-primary">±{energyTolerance.toFixed(1)}</span>
                   </div>
-                  <input type="range" min={3} max={20} value={bpmTolerance}
-                    onChange={e => setBpmTolerance(Number(e.target.value))}
+                  <input type="range" min={0.5} max={5} step={0.5} value={energyTolerance}
+                    onChange={e => setEnergyTolerance(Number(e.target.value))}
                     className="w-full h-2 bg-secondary rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary"
                   />
                 </div>
@@ -217,13 +217,13 @@ export function ModulationPathView({ files, onBack, onPlay, onStop, playingId }:
                             <>
                               <p className="text-sm font-medium truncate">{step.track.name}</p>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="text-xs font-mono font-bold" style={{
-                                  color: step.track.bpm
-                                    ? step.track.bpm < 90 ? 'hsl(200,80%,55%)' : step.track.bpm <= 125 ? 'hsl(40,90%,55%)' : 'hsl(0,80%,55%)'
-                                    : undefined
-                                }}>
-                                  {step.track.bpm} BPM
-                                </span>
+                                {step.track.energy !== null && (
+                                  <span className="text-xs font-mono font-bold" style={{
+                                    color: step.track.energy < 3 ? 'hsl(200,80%,55%)' : step.track.energy < 5.5 ? 'hsl(160,70%,45%)' : step.track.energy < 8 ? 'hsl(40,90%,55%)' : 'hsl(0,80%,55%)'
+                                  }}>
+                                    E {step.track.energy.toFixed(1)}
+                                  </span>
+                                )}
                                 <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
                                   style={{
                                     backgroundColor: getKeyColor(step.camelot) + '22',
@@ -336,7 +336,7 @@ function TrackSelector({
               {selected.camelot}
             </span>
             <span className="text-sm truncate flex-1">{selected.name}</span>
-            <span className="text-xs text-muted-foreground font-mono">{selected.bpm} BPM</span>
+            {selected.energy !== null && <span className="text-xs text-muted-foreground font-mono">E {selected.energy.toFixed(1)}</span>}
           </>
         ) : (
           <span className="text-sm text-muted-foreground">Sélectionner un track…</span>
@@ -369,7 +369,7 @@ function TrackSelector({
                     {t.camelot}
                   </span>
                   <span className="truncate flex-1">{t.name}</span>
-                  <span className="text-[10px] text-muted-foreground font-mono shrink-0">{t.bpm}</span>
+                  {t.energy !== null && <span className="text-[10px] text-muted-foreground font-mono shrink-0">E{t.energy.toFixed(1)}</span>}
                 </button>
               ))}
             </div>
