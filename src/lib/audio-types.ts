@@ -1,3 +1,5 @@
+import type { EnergyLevel } from './energy-detector';
+
 export interface AudioFileInfo {
   id: string;
   name: string;
@@ -5,13 +7,15 @@ export interface AudioFileInfo {
   format: string;
   size: number;
   duration: number;
-  bpm: number | null;
-  djBpm: number | null;       // normalized BPM for DJ use
-  bpmSource: 'tag' | 'analyzed' | null; // where BPM came from
-  key: string | null;         // e.g. "F# minor"
-  camelot: string | null;     // e.g. "11A"
+  // Tonality
+  key: string | null;             // e.g. "F# minor"
+  camelot: string | null;         // e.g. "11A"
   keyConfidence: number | null;
-  keyStatus: 'idle' | 'analyzing' | 'done' | 'error';
+  keyStatus: 'idle' | 'pending' | 'analyzing' | 'done' | 'error';
+  // Energy
+  energy: number | null;          // 0–10
+  energyLevel: EnergyLevel | null;
+  // Misc
   status: 'pending' | 'analyzing' | 'done' | 'error';
   error?: string;
   keyError?: string;
@@ -19,31 +23,7 @@ export interface AudioFileInfo {
   safUri?: string;
 }
 
-/**
- * Normalize BPM to DJ range (90-150).
- * Matches behavior of DiscDj, VirtualDJ, Serato, Rekordbox.
- */
-export function normalizeDjBpm(bpm: number): number {
-  let normalized = bpm;
-  while (normalized < 90 && normalized * 2 <= 200) normalized *= 2;
-  while (normalized > 150 && normalized / 2 >= 60) normalized /= 2;
-  return Math.round(normalized * 10) / 10;
-}
-
-/**
- * Check if two BPMs are DJ-compatible (including half/double tempo).
- * Returns the effective delta after considering half/double.
- */
-export function djBpmDelta(bpmA: number, bpmB: number): number {
-  const direct = Math.abs(bpmA - bpmB);
-  const halfA = Math.abs(bpmA * 2 - bpmB);
-  const halfB = Math.abs(bpmA - bpmB * 2);
-  const doubleA = Math.abs(bpmA / 2 - bpmB);
-  const doubleB = Math.abs(bpmA - bpmB / 2);
-  return Math.min(direct, halfA, halfB, doubleA, doubleB);
-}
-
-export type SortKey = 'name' | 'bpm' | 'duration' | 'format' | 'key' | 'camelot';
+export type SortKey = 'name' | 'duration' | 'format' | 'key' | 'camelot' | 'energy';
 export type SortDirection = 'asc' | 'desc';
 
 export interface SortConfig {
@@ -53,19 +33,18 @@ export interface SortConfig {
 
 export interface FilterConfig {
   search: string;
-  bpmMin: number | null;
-  bpmMax: number | null;
-  keyFilter: string | null;   // specific key like "F# minor"
+  keyFilter: string | null;       // specific key like "F# minor"
   modeFilter: 'major' | 'minor' | null;
-  camelotFilter: string | null; // e.g. "8A"
+  camelotFilter: string | null;   // e.g. "8A"
+  energyMin: number | null;       // 0–10
+  energyMax: number | null;
 }
 
-export const BPM_GROUPS = [
-  { label: '< 90 BPM', min: 0, max: 89, colorClass: 'text-bpm-slow' },
-  { label: '90–110 BPM', min: 90, max: 110, colorClass: 'text-bpm-medium' },
-  { label: '110–125 BPM', min: 110, max: 125, colorClass: 'text-bpm-fast' },
-  { label: '125–140 BPM', min: 125, max: 140, colorClass: 'text-bpm-faster' },
-  { label: '> 140 BPM', min: 140, max: Infinity, colorClass: 'text-bpm-fastest' },
+export const ENERGY_GROUPS = [
+  { label: '❄️ Chill (0–3)', min: 0, max: 3, colorClass: 'text-bpm-slow' },
+  { label: '🌊 Medium (3–5.5)', min: 3, max: 5.5, colorClass: 'text-bpm-medium' },
+  { label: '🔥 High (5.5–8)', min: 5.5, max: 8, colorClass: 'text-bpm-faster' },
+  { label: '⚡ Peak (8–10)', min: 8, max: 10, colorClass: 'text-bpm-fastest' },
 ] as const;
 
 export const SUPPORTED_FORMATS = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'webm'];
@@ -89,18 +68,9 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function getBpmGroup(bpm: number) {
-  if (bpm < 90) return BPM_GROUPS[0];
-  if (bpm <= 110) return BPM_GROUPS[1];
-  if (bpm <= 125) return BPM_GROUPS[2];
-  if (bpm <= 140) return BPM_GROUPS[3];
-  return BPM_GROUPS[4];
-}
-
-export function getBpmColor(bpm: number): string {
-  if (bpm < 90) return 'hsl(200, 80%, 55%)';
-  if (bpm <= 110) return 'hsl(160, 70%, 45%)';
-  if (bpm <= 125) return 'hsl(40, 90%, 55%)';
-  if (bpm <= 140) return 'hsl(20, 90%, 55%)';
-  return 'hsl(0, 80%, 55%)';
+export function getEnergyGroup(energy: number) {
+  if (energy < 3) return ENERGY_GROUPS[0];
+  if (energy < 5.5) return ENERGY_GROUPS[1];
+  if (energy < 8) return ENERGY_GROUPS[2];
+  return ENERGY_GROUPS[3];
 }
