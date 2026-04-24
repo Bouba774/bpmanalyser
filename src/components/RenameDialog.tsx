@@ -3,25 +3,15 @@ import { motion } from 'framer-motion';
 import { FolderSync, ChevronDown, ChevronUp, ArrowRight, Shield, RotateCcw, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { AudioFileInfo, getBpmColor } from '@/lib/audio-types';
+import { AudioFileInfo } from '@/lib/audio-types';
+import { energyColor } from '@/lib/energy-detector';
 import {
-  RenameFormat,
-  SortOrder,
-  RenameOptions,
-  generateNewName,
-  renameFilesNatively,
-  isNativePlatform,
-  getBackupLogs,
-  rollbackRename,
-  RenameLog,
+  RenameFormat, SortOrder, RenameOptions, generateNewName,
+  renameFilesNatively, isNativePlatform, getBackupLogs, rollbackRename, RenameLog,
 } from '@/lib/native-file-service';
 
 interface RenameDialogProps {
@@ -34,9 +24,9 @@ type Step = 'config' | 'preview' | 'processing' | 'result' | 'rollback';
 
 export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
   const [step, setStep] = useState<Step>('config');
-  const [format, setFormat] = useState<RenameFormat>('numeric_bpm');
+  const [format, setFormat] = useState<RenameFormat>('numeric_energy');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
-  const [customTemplate, setCustomTemplate] = useState('{index}_{bpm}_{nom}');
+  const [customTemplate, setCustomTemplate] = useState('{index}_{energy}_{nom}');
   const [result, setResult] = useState<{ success: number; errors: string[] } | null>(null);
   const [backupLogs, setBackupLogs] = useState<RenameLog[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,20 +34,20 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
   const isNative = isNativePlatform();
 
   const analyzedFiles = useMemo(
-    () => files.filter(f => f.status === 'done' && f.bpm !== null),
-    [files]
+    () => files.filter(f => f.status === 'done' && f.energy !== null && f.camelot !== null),
+    [files],
   );
 
   const options: RenameOptions = { format, sortOrder, customTemplate };
 
   const preview = useMemo(() => {
     const sorted = [...analyzedFiles].sort((a, b) =>
-      sortOrder === 'asc' ? (a.bpm ?? 0) - (b.bpm ?? 0) : (b.bpm ?? 0) - (a.bpm ?? 0)
+      sortOrder === 'asc' ? (a.energy ?? 0) - (b.energy ?? 0) : (b.energy ?? 0) - (a.energy ?? 0),
     );
     return sorted.map((f, i) => ({
       original: f.name,
-      newName: generateNewName(f.name, f.bpm!, i, sorted.length, options),
-      bpm: f.bpm!,
+      newName: generateNewName(f.name, f.energy!, f.camelot!, i, sorted.length, options),
+      energy: f.energy!,
     }));
   }, [analyzedFiles, format, sortOrder, customTemplate]);
 
@@ -65,13 +55,12 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
     setStep('processing');
     setIsProcessing(true);
 
-    const filesToRename = analyzedFiles
-      .filter(f => f.bpm !== null)
-      .map(f => ({
-        name: f.name,
-        bpm: f.bpm!,
-        uri: f.safUri || (f.file as any)?.uri || f.path,
-      }));
+    const filesToRename = analyzedFiles.map(f => ({
+      name: f.name,
+      energy: f.energy!,
+      camelot: f.camelot!,
+      uri: f.safUri || (f.file as any)?.uri || f.path,
+    }));
 
     const res = await renameFilesNatively(filesToRename, options);
     setResult({ success: res.success, errors: res.errors });
@@ -80,8 +69,7 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
   };
 
   const handleShowRollback = async () => {
-    const logs = await getBackupLogs();
-    setBackupLogs(logs);
+    setBackupLogs(await getBackupLogs());
     setStep('rollback');
   };
 
@@ -101,9 +89,10 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
 
   const formatLabels: Record<RenameFormat, { label: string; example: string }> = {
     numeric: { label: 'Numérique simple', example: '001_nom.mp3' },
-    numeric_bpm: { label: 'Numérique + BPM', example: '001_124BPM_nom.mp3' },
-    bpm_only: { label: 'BPM seul', example: '124BPM_nom.mp3' },
-    custom: { label: 'Custom', example: customTemplate.replace('{index}', '001').replace('{bpm}', '124').replace('{nom}', 'track') + '.mp3' },
+    numeric_energy: { label: 'Numérique + Énergie', example: '001_E7p3_nom.mp3' },
+    energy_only: { label: 'Énergie seule', example: 'E7p3_nom.mp3' },
+    numeric_camelot: { label: 'Numérique + Camelot', example: '001_8A_nom.mp3' },
+    custom: { label: 'Custom', example: customTemplate.replace('{index}', '001').replace('{energy}', '7p3').replace('{nom}', 'track') + '.mp3' },
   };
 
   return (
@@ -112,14 +101,12 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <FolderSync className="h-5 w-5 text-primary" />
-            Réorganiser par BPM
+            Réorganiser par énergie / Camelot
           </DialogTitle>
           {!isNative && (
             <div className="flex items-center gap-2 p-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs">
               <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-              <span className="text-destructive">
-                Renommage natif requis. Compilez avec Capacitor.
-              </span>
+              <span className="text-destructive">Renommage natif requis. Compilez avec Capacitor.</span>
             </div>
           )}
           <DialogDescription className="text-muted-foreground text-xs">
@@ -128,10 +115,8 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto min-h-0 py-2">
-          {/* Step: Config */}
           {step === 'config' && (
             <div className="space-y-3">
-              {/* Format */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-foreground">Format de renommage</Label>
                 <RadioGroup value={format} onValueChange={(v) => setFormat(v as RenameFormat)} className="space-y-1">
@@ -151,12 +136,11 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
                     value={customTemplate}
                     onChange={e => setCustomTemplate(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg bg-secondary border border-border text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    placeholder="{index}_{bpm}_{nom}"
+                    placeholder="{index}_{energy}_{camelot}_{nom}"
                   />
                 )}
               </div>
 
-              {/* Sort Order */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-foreground">Classement</Label>
                 <RadioGroup value={sortOrder} onValueChange={v => setSortOrder(v as SortOrder)} className="flex gap-2">
@@ -175,7 +159,6 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
                 </RadioGroup>
               </div>
 
-              {/* Security badge */}
               <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/10 text-[10px] text-muted-foreground">
                 <Shield className="h-3.5 w-3.5 text-primary shrink-0" />
                 <span>Backup auto • Rollback • Zéro perte</span>
@@ -183,7 +166,6 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
             </div>
           )}
 
-          {/* Step: Preview */}
           {step === 'preview' && (
             <div className="space-y-3">
               <div className="space-y-1">
@@ -192,27 +174,22 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
                     <span className="font-mono truncate flex-1 text-muted-foreground">{p.original}</span>
                     <ArrowRight className="h-3 w-3 text-primary shrink-0" />
                     <span className="font-mono truncate flex-1 font-medium text-foreground">{p.newName}</span>
-                    <span className="font-mono font-bold shrink-0" style={{ color: getBpmColor(p.bpm) }}>{p.bpm}</span>
+                    <span className="font-mono font-bold shrink-0" style={{ color: energyColor(p.energy) }}>{p.energy.toFixed(1)}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Step: Processing */}
           {step === 'processing' && (
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
-              >
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}>
                 <FolderSync className="h-10 w-10 text-primary" />
               </motion.div>
               <p className="text-sm text-muted-foreground">Renommage en cours…</p>
             </div>
           )}
 
-          {/* Step: Result */}
           {step === 'result' && result && (
             <div className="space-y-4">
               {result.errors.length === 0 ? (
@@ -237,7 +214,6 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
             </div>
           )}
 
-          {/* Step: Rollback */}
           {step === 'rollback' && (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
@@ -260,7 +236,6 @@ export function RenameDialog({ open, onOpenChange, files }: RenameDialogProps) {
           )}
         </div>
 
-        {/* Fixed footer buttons */}
         <div className="shrink-0 pt-2 border-t border-border flex gap-2 justify-between">
           {step === 'config' && (
             <>
