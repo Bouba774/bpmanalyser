@@ -20,18 +20,18 @@ export async function exportHarmonicPdf(playlist: HarmonicPlaylist) {
   doc.text(`Généré le ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR')}`, 14, 28);
   doc.text(`${playlist.tracks.length} track(s) — Score moyen: ${playlist.avgScore}`, 14, 34);
 
-  const head = [['#', 'Fichier', 'BPM', 'Key', 'Camelot', 'Durée', 'Transition', 'Score']];
+  const head = [['#', 'Fichier', 'Énergie', 'Key', 'Camelot', 'Durée', 'Transition', 'Score']];
 
   const tableData = playlist.tracks.map((track, i) => {
     const transition = playlist.transitions[i - 1];
     return [
       `${i + 1}`,
       track.name,
-      track.bpm !== null ? `${track.bpm}` : '—',
+      track.energy !== null ? `${track.energy.toFixed(1)}` : '—',
       track.key || '—',
       track.camelot || '—',
       formatDuration(track.duration),
-      transition ? `${transition.camelotRelation} (Δ${transition.bpmDelta})` : '— Start —',
+      transition ? `${transition.camelotRelation} (Δ${transition.energyDelta})` : '— Start —',
       transition ? `${transition.score}` : '—',
     ];
   });

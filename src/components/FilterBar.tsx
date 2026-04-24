@@ -19,8 +19,8 @@ interface FilterBarProps {
 }
 
 const sortOptions: { value: string; label: string }[] = [
-  { value: 'bpm-asc', label: 'BPM ↑' },
-  { value: 'bpm-desc', label: 'BPM ↓' },
+  { value: 'energy-asc', label: 'Énergie ↑' },
+  { value: 'energy-desc', label: 'Énergie ↓' },
   { value: 'name-asc', label: 'Nom A-Z' },
   { value: 'name-desc', label: 'Nom Z-A' },
   { value: 'duration-asc', label: 'Durée ↑' },
@@ -39,7 +39,6 @@ export function FilterBar({ filter, sort, onFilterChange, onSortChange, hasKeys 
 
   return (
     <div className="space-y-3">
-      {/* Search - full width */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -50,33 +49,37 @@ export function FilterBar({ filter, sort, onFilterChange, onSortChange, hasKeys 
         />
       </div>
 
-      {/* Filters row - wrapping */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* BPM Range */}
+        {/* Energy Range */}
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="h-4 w-4 text-muted-foreground shrink-0" />
           <Input
             type="number"
-            placeholder="Min"
-            value={filter.bpmMin ?? ''}
+            placeholder="E min"
+            min={0}
+            max={10}
+            step={0.5}
+            value={filter.energyMin ?? ''}
             onChange={(e) =>
-              onFilterChange({ ...filter, bpmMin: e.target.value ? Number(e.target.value) : null })
+              onFilterChange({ ...filter, energyMin: e.target.value ? Number(e.target.value) : null })
             }
             className="w-20 h-10 bg-secondary border-border text-center font-mono text-sm"
           />
           <span className="text-muted-foreground">–</span>
           <Input
             type="number"
-            placeholder="Max"
-            value={filter.bpmMax ?? ''}
+            placeholder="E max"
+            min={0}
+            max={10}
+            step={0.5}
+            value={filter.energyMax ?? ''}
             onChange={(e) =>
-              onFilterChange({ ...filter, bpmMax: e.target.value ? Number(e.target.value) : null })
+              onFilterChange({ ...filter, energyMax: e.target.value ? Number(e.target.value) : null })
             }
             className="w-20 h-10 bg-secondary border-border text-center font-mono text-sm"
           />
         </div>
 
-        {/* Mode Filter */}
         {hasKeys && (
           <Select
             value={filter.modeFilter ?? 'all'}
@@ -94,7 +97,6 @@ export function FilterBar({ filter, sort, onFilterChange, onSortChange, hasKeys 
           </Select>
         )}
 
-        {/* Camelot Filter */}
         {hasKeys && (
           <Select
             value={filter.camelotFilter ?? 'all'}
@@ -112,16 +114,13 @@ export function FilterBar({ filter, sort, onFilterChange, onSortChange, hasKeys 
           </Select>
         )}
 
-        {/* Sort */}
         <Select value={`${sort.key}-${sort.direction}`} onValueChange={handleSortChange}>
           <SelectTrigger className="w-[140px] h-10 bg-secondary border-border">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="bg-popover border-border z-50">
             {sortOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>

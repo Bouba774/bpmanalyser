@@ -9,6 +9,8 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
 const MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
 
+import { analyzeEnergy, EnergyResult } from './energy-detector';
+
 export interface KeyResult {
   key: string;
   camelot: string;
@@ -17,12 +19,17 @@ export interface KeyResult {
   mode: 'major' | 'minor';
 }
 
-export async function detectKey(file: File): Promise<KeyResult> {
-  const arrayBuffer = await file.arrayBuffer();
-  return detectKeyFromArrayBuffer(arrayBuffer);
+export interface KeyEnergyResult extends KeyResult {
+  energy: EnergyResult;
+  duration: number;
 }
 
-export async function detectKeyFromArrayBuffer(arrayBuffer: ArrayBuffer): Promise<KeyResult> {
+export async function detectKeyAndEnergy(file: File): Promise<KeyEnergyResult> {
+  const arrayBuffer = await file.arrayBuffer();
+  return detectKeyAndEnergyFromArrayBuffer(arrayBuffer);
+}
+
+export async function detectKeyAndEnergyFromArrayBuffer(arrayBuffer: ArrayBuffer): Promise<KeyEnergyResult> {
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
 
   try {
@@ -30,14 +37,19 @@ export async function detectKeyFromArrayBuffer(arrayBuffer: ArrayBuffer): Promis
     const channelData = audioBuffer.getChannelData(0);
     const sampleRate = audioBuffer.sampleRate;
 
-    // Use 15s from the middle (enough for key, much faster)
+    // Use 15s from the middle for key (enough, fast)
     const totalSamples = channelData.length;
     const analysisLength = Math.min(totalSamples, sampleRate * 15);
     const startOffset = Math.floor(Math.max(0, (totalSamples - analysisLength) / 2));
     const segment = channelData.slice(startOffset, startOffset + analysisLength);
 
     const chromagram = computeChromagram(segment, sampleRate);
-    return findKey(chromagram);
+    const keyRes = findKey(chromagram);
+
+    // Energy uses up to 30s of the same channel — already in memory
+    const energy = analyzeEnergy(channelData, sampleRate);
+
+    return { ...keyRes, energy, duration: audioBuffer.duration };
   } finally {
     await audioContext.close();
   }

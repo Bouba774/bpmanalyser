@@ -115,7 +115,7 @@ export function buildModulationPath(
   to: AudioFileInfo,
   library: AudioFileInfo[],
   maxPivots: number = 4,
-  bpmTolerance: number = 10,
+  energyTolerance: number = 2,
 ): ModulationPath | null {
   if (!from.camelot || !to.camelot) return null;
 
@@ -124,7 +124,6 @@ export function buildModulationPath(
 
   const isDirect = camelotPath.length <= 2;
 
-  // Build track index by camelot code
   const tracksByKey = new Map<string, AudioFileInfo[]>();
   for (const t of library) {
     if (!t.camelot || t.status !== 'done' || t.keyStatus !== 'done') continue;
@@ -134,14 +133,13 @@ export function buildModulationPath(
     tracksByKey.set(t.camelot, list);
   }
 
-  // For intermediate steps, find best pivot tracks (closest BPM)
   const steps: ModulationStep[] = [];
   const pivotTracks: AudioFileInfo[] = [];
   const usedIds = new Set([from.id, to.id]);
 
-  // Interpolate target BPM linearly from→to
-  const fromBpm = from.bpm ?? 120;
-  const toBpm = to.bpm ?? 120;
+  // Interpolate target ENERGY linearly from→to
+  const fromEnergy = from.energy ?? 5;
+  const toEnergy = to.energy ?? 5;
 
   for (let i = 0; i < camelotPath.length; i++) {
     const code = camelotPath[i];
@@ -156,15 +154,13 @@ export function buildModulationPath(
       continue;
     }
 
-    // Find best pivot: closest to interpolated BPM
-    const targetBpm = fromBpm + (toBpm - fromBpm) * (i / (camelotPath.length - 1));
+    const targetEnergy = fromEnergy + (toEnergy - fromEnergy) * (i / (camelotPath.length - 1));
     const candidates = (tracksByKey.get(code) || [])
       .filter(t => !usedIds.has(t.id))
-      .filter(t => t.bpm !== null && Math.abs(t.bpm - targetBpm) <= bpmTolerance);
+      .filter(t => t.energy !== null && Math.abs(t.energy - targetEnergy) <= energyTolerance);
 
-    // Sort by BPM proximity
     candidates.sort((a, b) =>
-      Math.abs((a.bpm ?? 0) - targetBpm) - Math.abs((b.bpm ?? 0) - targetBpm)
+      Math.abs((a.energy ?? 0) - targetEnergy) - Math.abs((b.energy ?? 0) - targetEnergy),
     );
 
     const pivot = candidates[0] || null;
