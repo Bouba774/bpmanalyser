@@ -12,7 +12,7 @@ export interface RenameLog {
   entries: RenameEntry[];
 }
 
-export type RenameFormat = 'numeric' | 'numeric_bpm' | 'bpm_only' | 'custom';
+export type RenameFormat = 'numeric' | 'numeric_energy' | 'energy_only' | 'numeric_camelot' | 'custom';
 export type SortOrder = 'asc' | 'desc';
 
 export interface RenameOptions {
@@ -21,35 +21,47 @@ export interface RenameOptions {
   customTemplate?: string;
 }
 
-const RENAME_LOG_KEY = 'bpm-analyzer-rename-logs';
+const RENAME_LOG_KEY = 'key-energy-analyzer-rename-logs';
 
 export function isNativePlatform(): boolean {
   return Capacitor.isNativePlatform();
 }
 
+export interface RenameInput {
+  name: string;
+  energy: number;       // 0–10
+  camelot: string;      // e.g. "8A"
+  uri: string;
+}
+
 export function generateNewName(
   originalName: string,
-  bpm: number,
+  energy: number,
+  camelot: string,
   index: number,
   totalFiles: number,
-  options: RenameOptions
+  options: RenameOptions,
 ): string {
   const ext = originalName.substring(originalName.lastIndexOf('.'));
   const baseName = originalName.substring(0, originalName.lastIndexOf('.'));
   const paddedIndex = String(index + 1).padStart(String(totalFiles).length, '0');
+  const energyStr = energy.toFixed(1).replace('.', 'p'); // e.g. "7p3"
 
   switch (options.format) {
     case 'numeric':
       return `${paddedIndex}_${baseName}${ext}`;
-    case 'numeric_bpm':
-      return `${paddedIndex}_${bpm}BPM_${baseName}${ext}`;
-    case 'bpm_only':
-      return `${bpm}BPM_${baseName}${ext}`;
+    case 'numeric_energy':
+      return `${paddedIndex}_E${energyStr}_${baseName}${ext}`;
+    case 'energy_only':
+      return `E${energyStr}_${baseName}${ext}`;
+    case 'numeric_camelot':
+      return `${paddedIndex}_${camelot}_${baseName}${ext}`;
     case 'custom': {
-      const template = options.customTemplate || '{index}_{bpm}_{nom}';
+      const template = options.customTemplate || '{index}_{energy}_{nom}';
       return template
         .replace('{index}', paddedIndex)
-        .replace('{bpm}', String(bpm))
+        .replace('{energy}', energyStr)
+        .replace('{camelot}', camelot)
         .replace('{nom}', baseName) + ext;
     }
     default:
@@ -58,19 +70,12 @@ export function generateNewName(
 }
 
 export async function saveBackupLog(entries: RenameEntry[]): Promise<void> {
-  const log: RenameLog = {
-    timestamp: new Date().toISOString(),
-    entries,
-  };
-
+  const log: RenameLog = { timestamp: new Date().toISOString(), entries };
   let existingLogs: RenameLog[] = [];
   try {
     const stored = localStorage.getItem(RENAME_LOG_KEY);
     if (stored) existingLogs = JSON.parse(stored);
-  } catch {
-    // No existing logs
-  }
-
+  } catch { /* No existing logs */ }
   existingLogs.push(log);
   localStorage.setItem(RENAME_LOG_KEY, JSON.stringify(existingLogs));
 }
@@ -80,9 +85,7 @@ export async function getBackupLogs(): Promise<RenameLog[]> {
     const stored = localStorage.getItem(RENAME_LOG_KEY);
     if (stored) return JSON.parse(stored);
     return [];
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
 export async function rollbackRename(log: RenameLog): Promise<{ success: number; errors: string[] }> {
@@ -93,36 +96,30 @@ export async function rollbackRename(log: RenameLog): Promise<{ success: number;
 
   for (const entry of log.entries) {
     try {
-      // Use SAF rename to restore original name
       const result = await SAFFolderPicker.renameFile({
         uri: entry.originalUri,
         newName: entry.originalName,
       });
-
-      if (result.success) {
-        success++;
-      } else {
-        errors.push(`${entry.newName}: ${result.error || 'Échec'}`);
-      }
+      if (result.success) success++;
+      else errors.push(`${entry.newName}: ${result.error || 'Échec'}`);
     } catch (err) {
       errors.push(`${entry.newName}: ${(err as Error).message}`);
     }
   }
-
   return { success, errors };
 }
 
 export async function renameFilesNatively(
-  files: { name: string; bpm: number; uri: string }[],
-  options: RenameOptions
+  files: RenameInput[],
+  options: RenameOptions,
 ): Promise<{ success: number; errors: string[]; entries: RenameEntry[] }> {
   if (!isNativePlatform()) {
     return { success: 0, errors: ['Le renommage natif nécessite une app mobile'], entries: [] };
   }
 
-  // Sort by BPM
+  // Sort by energy
   const sorted = [...files].sort((a, b) =>
-    options.sortOrder === 'asc' ? a.bpm - b.bpm : b.bpm - a.bpm
+    options.sortOrder === 'asc' ? a.energy - b.energy : b.energy - a.energy,
   );
 
   const entries: RenameEntry[] = [];
