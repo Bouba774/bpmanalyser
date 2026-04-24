@@ -206,15 +206,16 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
               <div className="bg-card rounded-xl p-4 border border-border space-y-3">
                 <div>
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">Tolérance BPM</span>
-                    <span className="font-mono text-primary">±{bpmTolerance} BPM</span>
+                    <span className="text-muted-foreground">Tolérance Énergie</span>
+                    <span className="font-mono text-primary">±{energyTolerance.toFixed(1)}</span>
                   </div>
                   <input
                     type="range"
-                    min={2}
-                    max={15}
-                    value={bpmTolerance}
-                    onChange={e => setBpmTolerance(Number(e.target.value))}
+                    min={0.5}
+                    max={5}
+                    step={0.5}
+                    value={energyTolerance}
+                    onChange={e => setEnergyTolerance(Number(e.target.value))}
                     className="w-full h-2 bg-secondary rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary"
                   />
                 </div>
@@ -293,7 +294,7 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
                       <span>{qualityIcon(transition.quality)}</span>
                       <span className="text-muted-foreground">{transition.camelotRelation}</span>
                       <span className="text-muted-foreground">•</span>
-                      <span className="font-mono text-muted-foreground">Δ{transition.bpmDelta} BPM</span>
+                      <span className="font-mono text-muted-foreground">ΔE {transition.energyDelta}</span>
                       <span className="text-muted-foreground">•</span>
                       <span className="font-mono text-primary">{transition.score}pts</span>
                     </div>
@@ -326,9 +327,11 @@ export function HarmonicMixView({ files, onBack, onPlay, onStop, playingId }: Ha
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{track.name}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-xs font-mono font-bold" style={{ color: track.bpm ? (track.bpm < 90 ? 'hsl(200,80%,55%)' : track.bpm <= 125 ? 'hsl(40,90%,55%)' : 'hsl(0,80%,55%)') : undefined }}>
-                          {track.bpm} BPM
-                        </span>
+                        {track.energy !== null && (
+                          <span className="text-xs font-mono font-bold" style={{ color: track.energy < 3 ? 'hsl(200,80%,55%)' : track.energy < 5.5 ? 'hsl(160,70%,45%)' : track.energy < 8 ? 'hsl(40,90%,55%)' : 'hsl(0,80%,55%)' }}>
+                            E {track.energy.toFixed(1)}
+                          </span>
+                        )}
                         {track.camelot && (
                           <span
                             className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
